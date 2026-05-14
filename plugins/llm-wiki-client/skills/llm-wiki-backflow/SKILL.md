@@ -13,7 +13,7 @@ version: 0.2.0
 /wiki-backflow
     |
     +--> 1. 轨迹归档：把本次任务整理成本地目录 .claude/llm-wiki/backflow/<task-slug>/
-    |     （顶层 source.md + workspace/ 等附件）
+    |     （顶层 <task-slug>.md + workspace/ 等附件）
     |
     +--> 2. 轨迹上传：用户确认后，调用 wiki_submit_trajectory MCP 工具，
           单次把整个目录上传到 CANN-Infer-Wiki 的 sources/sessions/uploaded/<session_id>/
@@ -67,7 +67,7 @@ workspace 判断：
 - credentials、tokens、keys、`.env*`
 - `.git/`、`.idea/`、`.vscode/`、`.claude/llm-wiki/backflow/`（避免递归归档）
 
-如果被排除的材料有证据价值，在 `source.md` 的 `Notes` 中写清原路径、原因、摘要和可访问位置；不要把大文件硬塞进上传。
+如果被排除的材料有证据价值，在 `<task-slug>.md` 的 `Notes` 中写清原路径、原因、摘要和可访问位置；不要把大文件硬塞进上传。
 
 ### 1.3 创建本地归档
 
@@ -175,10 +175,10 @@ files = [
 
 要点：
 
-- `name` 用相对 `backflow/<task-slug>/` 的 posix 路径（如 `source.md`、`workspace/progress.md`、`workspace/logs/profile.txt`）
+- `name` 用相对 `backflow/<task-slug>/` 的 posix 路径（如 `<task-slug>.md`、`workspace/progress.md`、`workspace/logs/profile.txt`）
 - `name` 不能以 `/` 开头、不能含 `..` 段（server 端会拒）
 - `content` 一律是 base64 编码的字节（文本或二进制都用同一编码，server 端字节级还原）
-- 顶层必须有 `<task-slug>.md`，否则 server 端拒绝
+- **顶层必须恰好有 1 个 `.md` 文件**作为入口（命名约定 `<task-slug>.md`；server 端自动发现，不固定文件名），0 个或 ≥2 个均会被 server 拒绝
 - 跳过 `.git/`、`.DS_Store`、`__pycache__/`、`*.pyc`、`*.tmp` 等噪声
 - 单文件超过 ~5 MB 时停下问用户（base64 后变 ~6.7 MB 流量）
 
@@ -204,7 +204,8 @@ for p in sorted(root.rglob("*")):
     rel = p.relative_to(root).as_posix()
     files.append({"name": rel, "content": base64.b64encode(p.read_bytes()).decode()})
 
-assert any(f["name"] == "source.md" for f in files), "顶层缺 source.md"
+top_md = [f for f in files if "/" not in f["name"] and f["name"].lower().endswith(".md")]
+assert len(top_md) == 1, f"upload root must contain exactly 1 top-level .md, got {len(top_md)}: {[f['name'] for f in top_md]}"
 ```
 
 ### 2.2 调用 wiki_submit_trajectory
@@ -235,7 +236,7 @@ mcp__cann-infer-wiki__wiki_submit_trajectory(
 |---|---|
 | `status: ok` | 上传成功。向用户汇报 server 端落盘路径、文件数、字节数；提示 "server 端 monitor 会自动接力 ingest，不需要等待"。**不删除**本地 `.claude/llm-wiki/backflow/<task-slug>/`（用户可能要二次检查） |
 | `status: error, message: "session already exists: ..."` | 该 `session_id` 已上传过。问用户：① 用 `-r2`/`-r3` 后缀重起一次 backflow ② 或就此停止 |
-| `status: error, message: "top-level source.md is required ..."` | 归档目录顶层缺 `source.md`。回到 1.4 补全后重试 |
+| `status: error, message: "upload root must contain exactly one top-level .md file, got ..."` | 顶层 `.md` 文件不是恰好 1 个（0 个或 ≥2 个）。回到 1.4 调整后重试 |
 | `status: error, message: "files[i].content invalid base64 ..."` 或 `unsafe path component ...` | 2.1 编码或路径构造出问题，复查 `name` / `content` 字段 |
 | MCP 不可达 / 工具不可见 | 告诉用户先跑 `/wiki-mount` 确认 server 就绪后再 `/wiki-backflow`；本地 archive 已经在 `.claude/llm-wiki/backflow/<task-slug>/`，下次直接复用 |
 
