@@ -9,7 +9,7 @@
     {
       "name": "llm-wiki-client",
       "description": "在 Claude Code 中挂载、查询并回流 CANN-Infer-Wiki。",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "author": {
         "name": "AndyKong"
       },
