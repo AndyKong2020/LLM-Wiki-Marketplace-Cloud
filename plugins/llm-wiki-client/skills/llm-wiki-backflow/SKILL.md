@@ -206,6 +206,7 @@ for p in sorted(root.rglob("*")):
 
 top_md = [f for f in files if "/" not in f["name"] and f["name"].lower().endswith(".md")]
 assert len(top_md) == 1, f"upload root must contain exactly 1 top-level .md, got {len(top_md)}: {[f['name'] for f in top_md]}"
+assert "/" not in session_id and "\\" not in session_id, f"session_id must not contain path separators: {session_id!r}"
 ```
 
 ### 2.2 调用 wiki_submit_trajectory
@@ -217,7 +218,7 @@ mcp__cann-infer-wiki__wiki_submit_trajectory(
 )
 ```
 
-`session_id` 直接用 task-slug；server 端的合法性检查会拒绝以 `.` 开头或含路径分隔符的值。Server 端写入走 `<uploaded>/.staging/<id>/` → 原子 `rename` 到 `<uploaded>/<id>/`，monitor 永远不会看到半成品。
+`session_id` 直接用 task-slug。Server 端用 `Path(session_id).name` 取 basename 兜底，对空串 / `.` / `..` / 以 `.` 开头的值会显式 reject，但**含 `/` 或 `\` 的值不会报错而是被静默截短**（如 `e2e/case-e` 落到 `uploaded/case-e/`），客户端务必在本地先 assert session_id 无路径分隔符（见 2.1 末尾）。Server 端写入走 `<uploaded>/.staging/<id>/` → 原子 `rename` 到 `<uploaded>/<id>/`，monitor 永远不会看到半成品。
 
 成功返回：
 
