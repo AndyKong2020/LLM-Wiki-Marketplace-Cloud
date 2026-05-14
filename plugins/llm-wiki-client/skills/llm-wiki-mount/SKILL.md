@@ -184,6 +184,8 @@ grep -E "Uvicorn running" "$LOG_FILE" \
 
 ### 3.5 MCP RPC probe
 
+先确认该 MCP tools 是否在本次会话可见、可用。若不可见或不可用，先提示用户手动执行 `/mcp` 重新连接mcp。
+
 不要只看 `claude mcp list` 显示 Connected——那只代表 HTTP 握手通，不能发现"工具没注册 / index loader 挂 / retriever 错误"一类暗病。直接调用一次：
 
 ```text
