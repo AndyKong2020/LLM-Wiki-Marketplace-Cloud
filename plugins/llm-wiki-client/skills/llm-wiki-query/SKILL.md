@@ -1,213 +1,205 @@
 ---
 name: llm-wiki-query
-description: 查询和运行时消费 mounted LLM-Wiki。进入新的 LLM/NPU 优化阶段、方案分析、策略选择、debug 调试、性能回归分析、model/kernel/case/gene/capsule/source 问题时使用。
-allowed-tools: Read Grep Bash Write Edit
-version: 0.1.0
+description: 查询和运行时消费已挂载的 CANN-Infer-Wiki（通过 MCP）。进入新的 LLM/NPU 推理优化阶段、做方案分析、策略选择、debug 调试、性能/精度回归分析；涉及具体 model / kernel / parallelism / module / framework / technique / quantization / platform 知识、或动态层任务回流型经验时使用。
+allowed-tools: Read Edit Write mcp__cann-infer-wiki__wiki_search mcp__cann-infer-wiki__wiki_get_page
+version: 0.3.0
 ---
 
 # LLM-Wiki Query
 
-## 1. 要查 Wiki 的场景
+## 1. 触发场景
 
-本节定义的是“哪些任务阶段必须查 wiki”，不是让 agent 临时判断是否要调用。`/wiki-mount` 写入的 `CLAUDE.md` pin block 会持续要求相关任务使用 `llm-wiki-query`。
+本 skill 是真实任务运行时的 wiki 入口。CLAUDE.md 中由 `/wiki-mount` 写入的 LLM-WIKI pin block 已经列出"哪些任务阶段必须查 wiki"，不要在临时判断中绕开它。
 
-遇到下面任一情况时，必须查 LLM-Wiki：
+下列任一情况发生时必须查 wiki：
 
-- 进入新的优化阶段，例如 bringup、profiling、kernel tuning、并行策略调整、显存优化、回归定位
-- 做方案分析、策略选择或实现路线判断
-- debug 调试、性能异常排查、错误模式归因
-- 需要查询 model、kernel、case、gene、capsule、source 相关知识
-- 需要判断当前任务是否已有 wiki 经验可复用
+- 进入新的优化阶段：bringup / profiling / kernel tuning / 并行策略调整 / 显存优化 / 回归定位
+- 做方案分析、策略选择、实现路线判断
+- debug 调试、性能或精度异常排查、错误模式归因
+- 涉及具体模型族（qwen3-moe / deepseek-r1 / hunyuan-* / longcat-* / kimi-k2 等）、算子（fia / mla / dia / sparse-flash-attention 等）、并行策略（tp / dp / cp / ep / zigzag-cp / ulysses 等）、推理框架（sglang / torchair / pypto / ascendc / atb 等）、优化技术（npu-graph-mode / weight-prefetch / superkernel 等）、量化（w8a8c8 / w4a8c8 / mxfp8 等）、硬件平台（atlas-a3 / ascend910）
+- 任务初期判断"是否有 wiki 经验可复用"
+- subagent 接到任务后，先查 wiki 再决定怎么做
 
-本 skill 是真实任务运行时的 wiki 入口。使用一次就必须记录一次页面使用记录，并把本次 wiki 查询摘要同步写入当前阶段的 `progress.md`。
+每次使用都必须写一条页面级记录，并把摘要同步到 `progress.md`（见第 4 节）。
 
-## 2. 定位 Wiki
+## 2. 重要原则
 
-从当前项目 `CLAUDE.md` 的 LLM-WIKI pin block 读取 wiki cache：
+**知识来源唯一是 MCP**。永远通过 `mcp__cann-infer-wiki__wiki_search` 与 `mcp__cann-infer-wiki__wiki_get_page` 获取知识。不要绕开 MCP 去读 `~/.claude/llm-wiki/repos/` 下的 cache 文件——cache 是 server 端依赖，客户端"事实"只来自 MCP 响应。
 
-```text
-<!-- LLM-WIKI:BEGIN -->
-...
-cache_path: <absolute cache path>
-...
-<!-- LLM-WIKI:END -->
-```
+**信任 server 排序，不要客户端二次判断**。`wiki_search` 内部已经跑了 retriever（默认 claude-agent 模式：sub-Agent 读 summary/tags/qValue 后选 topK 并打分），返回的就是已经按相关性排好序的候选清单。客户端只做 ① 拟好 query ② 拿前几个 ID 去 `wiki_get_page` 取正文 ③ 读完应用。**不要**在客户端再写一套基于 summary/tags 的过滤、不要根据 score 阈值取舍、不要重写 query 反复 search 调阈值——那些都是 server 该解决的。
 
-把 `cache_path` 记为 `$WIKI_ROOT`。如果 `CLAUDE.md` 不存在，或没有完整 LLM-WIKI pin block，要求用户先运行 `/wiki-mount`，不要猜测路径。
+不要预加载或穷举 wiki。`wiki_search` 的 `limit` 默认取 5 就够；`wiki_get_page` 一次拉 1-3 个 ID。不要"先 limit=50 再说"。
 
-## 3. Wiki 目录
+不要凭记忆假设有哪些页、哪些标签。当前可用的页面集合**只从本次 `wiki_search` 响应里**读。
 
-LLM-Wiki 是面向 LLM/NPU 推理优化的结构化 Markdown wiki。它不把“有哪些模型、算子、经验”写死在 skill 里；这些事实都要在运行时从 wiki 文件现读。
+`wiki_search` 返回 `warning`（retriever 失败）→ 据实上报给用户与 progress.md，不要伪造知识、不要换用 cache 文件凑数。
 
-### 内容分层
+subagent 使用本 skill 时与主 agent 共用同一份 `wiki_usage.md`。
 
-```text
-$WIKI_ROOT/
-├── wiki/                 # 知识平面
-│   ├── index/            #   顶层索引 + 各类型子索引
-│   ├── cases/            #   优化、排障、回归案例
-│   ├── models/           #   模型画像页
-│   ├── kernels/          #   算子 / 执行单元页
-│   ├── parallelism/      #   并行策略页
-│   ├── platform/         #   硬件平台页
-│   ├── quantization/     #   量化方法页
-│   ├── modules/          #   模型组件页
-│   ├── framework/        #   推理框架页
-│   └── technique/        #   优化技术页
-├── experience/           # 经验平面
-│   ├── index.md          #   经验层入口
-│   ├── genes/            #   策略模板（Gene）
-│   ├── capsules/         #   场景实例（Capsule）
-│   └── q_table.json      #   预留的效用快照
-├── sources/              # 来源层：外部证据入口
-├── schema/               # 活规范
-├── agents/               # Agent 角色定义
-├── templates/            # 页面模板
-└── log/                  # 变更日志
-```
+**永远不调用 `mcp__cann-infer-wiki__wiki_submit_trajectory`**——那是 `llm-wiki-backflow` 的职责。
 
-### 三层信息架构
+## 3. 执行查询（4 步）
 
-| 层 | 目录 | 作用 | 典型内容 |
-|---|---|---|---|
-| 来源层 | `sources/` | 记录外部资料、任务归档和关键路径 | Git 仓库、progress、报告、profiling 摘要 |
-| 知识层 | `wiki/` | 整理后的稳定知识，结论应能回链 evidence/source | 模型画像、算子行为、优化案例、策略对比 |
-| 经验层 | `experience/` | 运行时可复用的策略和实例 | gene、capsule |
+### 3.1 拟 query
 
-信息流向通常是：`sources/` 提供证据，`wiki/` 整理稳定知识，`experience/` 抽取可复用策略和场景实例。
+把当前问题压缩成一句话，**用 wiki 词汇**：
 
-### 知识页类型
+- 用具体的算子/模型/技术名（`npu_fused_infer_attention_score` / `Qwen3-MoE` / `npu-graph-mode`），不要泛泛说"attention 加速"
+- 包含场景关键修饰：硬件平台 / 精度 / 并行配置 / 阶段（prefill/decode）
+- 短：一般 ≤30 字，不堆长句
 
-wiki 通常包含这些类型：
+示例：
 
-| 类型 | 目录 | 覆盖范围 |
-|---|---|---|
-| Case | `wiki/cases/` | 业务案例、排障过程、优化任务 |
-| Model | `wiki/models/` | 模型结构、部署参数、已知热点 |
-| Kernel | `wiki/kernels/` | 算子角色、性能信号、优化要点 |
-| Parallelism | `wiki/parallelism/` | TP / EP / CP / DP / 多流并行 |
-| Platform | `wiki/platform/` | NPU 代际、算力规格、互联拓扑 |
-| Quantization | `wiki/quantization/` | W8A8 / W4A16 / FP8 等 |
-| Module | `wiki/modules/` | Attention / MoE / Embedding 等组件 |
-| Framework | `wiki/framework/` | vLLM / SGLang / AscendC 等 |
-| Technique | `wiki/technique/` | Paged Attention / Offload / 多流调度等 |
+| 原始任务表达 | 改写后的 query |
+|---|---|
+| "Qwen3-MoE 怎么调优？" | `Qwen3-MoE Atlas A3 BF16 attention TP MoE EP 切分` |
+| "decode 慢，看不出哪儿" | `decode 时延高 attention 与 router AllGather 归因` |
+| "MLA 和 FIA 怎么选" | `MLA-Prolog 与 npu_fused_infer_attention_score 适用条件对比` |
 
-上表只作结构参考。实际可用类型、页面数量和入口必须从 `$WIKI_ROOT/wiki/index/index.md` 现读。
-
-### Gene 与 Capsule
-
-- **Gene**：可跨任务复用的策略模板，回答“什么情况下用什么方法”。
-- **Capsule**：某个 gene 在真实环境中的执行实例，回答“这个方法在什么条件下怎么生效”。
-
-真实任务优先从 `experience/index.md` 和相关 gene 进入；capsule、wiki page、source 都是按需下钻层。
-
-## 4. 执行查询
-
-执行查询时按下面六步走：
-
-1. **理解问题**：判断当前阶段是在做事实查询、策略选择、对比分析、溯源验证还是 debug 调试。
-2. **读取入口**：先读 `$WIKI_ROOT/experience/index.md`，再读 `$WIKI_ROOT/wiki/index/index.md`。不要凭记忆假设有哪些类型或页面。
-3. **选择页面**：从 experience 里选择相关 gene，从 wiki index 里定位相关 case、model、kernel 或其他知识页。
-4. **深入阅读**：读取目标页正文。策略类问题重点看 gene 的策略、约束和已知 capsule；案例类问题重点看 case、capsule 和相关 model/kernel。
-5. **按需溯源**：需要验证结论时，沿页面中的 `[[sources/...]]` 或 Evidence 读 source。source 只用于证据回溯，不当作知识页。
-6. **写入记录**：每读一个页面，就写入 `wiki_usage.md`；本次查询对阶段判断有影响时，同时把摘要写入 `progress.md`。gene 页面要在阶段结束或 subagent 返回前补充分数。
-
-不要预加载整个 wiki。只读取当前阶段需要的页面；沿 wikilink 继续下钻时，也要遵守同样规则。
-
-## 5. 页面使用记录
-
-每次使用本 skill 都必须写页面使用记录。页面级记录文件放在当前任务 `progress.md` 的同级目录，文件名固定为：
+仅在你**明确知道**问题就限定在某一类知识时才加 `type` 或 `tags` 过滤：
 
 ```text
-wiki_usage.md
+wiki_search(query="...", type="kernel", limit=5)
+wiki_search(query="...", tags=["fia", "decode"], limit=5)
 ```
 
-如果当前任务有多个 `progress.md`，选择正在更新的那个阶段目录。如果当前阶段还没有 `progress.md`，先在当前阶段目录创建 `wiki_usage.md`，不要写到 `.claude/` 隐藏目录。
+`type` 取值：`model / kernel / parallelism / module / framework / technique / quantization / platform`，留空覆盖动态层。多个 `tags` 是交集。
 
-`wiki_usage.md` 只记录页面使用记录，不写 YAML，不写总表。每个使用过的页面用一级标题记录，标题直接写 wiki 内相对 path。
+否则**不加过滤**——server 端 retriever 跨类型搜往往更稳。
 
-````md
-# experience/genes/<gene>.md
+### 3.2 wiki_search
+
+```text
+mcp__cann-infer-wiki__wiki_search(query="<上一节拟好的 query>", limit=5)
+```
+
+返回 `{results: [{id, summary, tags, score, qValue}, ...], total}`。这就是 server 已经排好序的 topK，**直接用**：
+
+- 看 top-1/top-2 的 `summary` 决定下一步要不要取正文（覆盖问题就取，明显不沾就重写一条 query）
+- 候选最多取前 3 个 ID 进入 3.3
+- 不要去读 score / qValue 数值做二次过滤——排序已经合过这些信号
+
+如果 top-1 的 summary 跟问题完全不沾边（说明 query 没写好），**重写 query** 重新调一次，**不要**调 limit 翻底。最多重试一次；连续 2 次都不沾边就在 progress.md 记"wiki 暂无相关知识"，停止本次查询。
+
+### 3.3 wiki_get_page
+
+```text
+mcp__cann-infer-wiki__wiki_get_page(
+    ids=["wiki_static_cann-infer_models_qwen3-moe_md", ...]
+)
+```
+
+返回 `{pages: [{id, content, frontmatter, qValue}], errors: []}`。
+
+- `content`：Markdown 正文
+- `frontmatter`：可能含 `source`（溯源）、`contradictions`（矛盾页 ID 列表）、`arch_support` 等
+- `errors`：取页失败的 ID（多半是 ID 拼写错或页已归档）。跳过，**不重试**
+
+读 content 时按问题类别看不同段：
+
+- **策略类**：`## Solution` / `## When applicable` / `## Trade-offs`
+- **debug 类**：`## Problem` / `## Symptom` / `## Root Cause` / `## Verification`
+- **事实类**：API 名、参数表、约束条件
+- 若 `frontmatter.contradictions` 非空：必读其中之一了解争议点（再次 `wiki_get_page`）
+
+### 3.4 应用 + 记录
+
+把读到的内容应用到当前任务。如要拉起 subagent 做下钻工作，**在 prompt 里明确要求 subagent 也用 `llm-wiki-query` skill 并写同一份 `wiki_usage.md`**（路径见 5 节）。
+
+每次 `wiki_get_page` 取过的页都要写到 `wiki_usage.md`（4.1 节）；本次查询对阶段判断有影响时，同步在 `progress.md` 追加一条 bullet（4.2 节）。
+
+不要把整页 content 复制进 `wiki_usage.md`——记录的是"为什么读 / 读完得到了什么"，不是 wiki 镜像。
+
+## 4. 页面使用记录格式
+
+### 4.1 wiki_usage.md
+
+**位置**（严格）：
+
+- 优先：当前阶段 `progress.md` 同级目录下的 `wiki_usage.md`
+- 当前任务有多个 `progress.md` → 选**正在更新**的那个阶段目录
+- 当前阶段还没有 `progress.md` → 在当前阶段目录创建 `wiki_usage.md`
+- **不要**写到 `.claude/` 或其它隐藏目录
+- **不要**写到全局缓存或个人目录
+
+**格式**：每个使用过的页面一个一级标题，标题直接用 MCP ID。
+
+```md
+# wiki_static_cann-infer_models_qwen3-moe_md
 
 ## 原因
-
-为什么读取这个页面。
+为什么读取这个页面（当前阶段在判断什么、出于哪条线索查到这页）
 
 ## 效果
-
-这个页面对当前阶段的实际帮助。
+这个页面对当前阶段的实际帮助（解决了什么 / 改变了哪个判断 / 排除了哪个假设）
 
 ## 分数
-
-- overall: -1 | 0 | 1
-- relevance: <number in [-1, 1]>
-- actionability: <number in [-1, 1]>
-- correctness: <number in [-1, 1]>
+- overall: -1 | 0 | +1
 
 ## 备注
+保留限制、误导点、是否要继续使用、与其它页的关系
 
-保留限制、误导点、后续是否继续使用。
+# wiki_dynamic_cann-infer_<slug>_md
 
-# wiki/<path>.md
+...
+```
 
-## 原因
+`overall` 必填，取值范围 `{-1, 0, +1}`：
+- `+1`：明确推动了任务前进 / 解决了具体问题
+- `0`：读了但对当前阶段没产生显著影响（仍记下，避免被反复 re-search）
+- `-1`：误导了判断 / 与现实冲突 / 浪费了时间
 
-为什么读取这个页面。
+同一页面被多次使用 → 不要新建重复 header，在已有标题下追加新的原因/效果/备注；分数取最近一次判断（覆盖式更新）。
 
-## 效果
+### 4.2 progress.md 同步
 
-这个页面对当前阶段的实际帮助。
+每次使用 wiki 后，在当前阶段 `progress.md` 的小节下追加一条 bullet：
 
-## 备注
+```md
+- 查阅：`wiki_static_cann-infer_models_qwen3-moe_md`、`wiki_static_cann-infer_kernels_fused-infer-attention-score_md`
+  - 目的：判断 attention TP 切分上限对 decode 时延的影响
+  - 结论：4tp + FIA 比 8tp 整体快 35%；KV cache 翻倍但 FIA 单核增益更大
+  - 记录：`wiki_usage.md`
+```
 
-保留限制、误导点、后续是否继续使用。
-````
-
-非 gene 页面只写原因、效果和备注。gene 页面必须写多个分数。`overall` 表征总体有用性，只能从 `-1`、`0`、`1` 中选择；`relevance`、`actionability`、`correctness` 取值范围都是 `[-1, 1]`。
-
-同一页面被多次使用时，不要新建重复一级标题；在已有标题下追加新的原因、效果或备注。
-
-### Progress 同步记录
-
-每次使用 wiki 后，也要把查询摘要写入当前阶段的 `progress.md`。不要把完整页面使用记录复制进 `progress.md`；这里只写阶段进展可读的短记录。
-
-优先追加到当前阶段小节下；如果找不到合适位置，在文件末尾创建：
+阶段小节不存在或难找位置 → 在 `progress.md` 末尾建一小节：
 
 ```md
 ## Wiki 查询记录
 ```
 
-每次查询追加一条 Markdown bullet：
+`progress.md` 写"阶段进展摘要"，`wiki_usage.md` 写"逐页面原因/效果/分数"。两者都要写。
 
-```md
-- 查阅：`experience/genes/<gene>.md`、`wiki/<path>.md`
-  - 目的：本次为什么查 wiki
-  - 结论：对当前阶段产生了什么影响
-  - 记录：`wiki_usage.md`
-```
+## 5. Subagent 规则
 
-`progress.md` 记录的是阶段进展摘要；`wiki_usage.md` 记录的是逐页面原因、效果、分数和备注。两者都要写。
+subagent 使用本 skill 时必须遵守：
 
-## 6. Subagent 规则
+- 与主 agent 共用同一份 `wiki_usage.md`（路径由主 agent 在调用时传入；subagent 不另建）
+- 如无写文件权限，subagent 必须在返回给主 agent 时提供可追加的 Markdown 片段（原因/效果/分数/备注按 4.1 格式）
+- subagent 返回前**必须**为本次读过的每个页面填 `overall` 分数；主 agent 不替 subagent 补分
+- subagent 最终回复带上 `wiki_usage.md` 路径、本次新增/更新的页面 ID 列表
 
-subagent 使用本 skill 时，也要写入同一个 `wiki_usage.md`。如果 subagent 无法直接写文件，必须在返回给主 agent 时提供可追加的 Markdown 片段。
+## 6. 主 Agent 规则
 
-subagent 返回给主 agent 前，必须完成 gene 有用性评分。评分只针对本 subagent 实际读过的 gene 页面，写在该 gene 页面标题下的 `## 分数` 中；`overall` 只能取 `-1`、`0`、`1`。
+主 agent 每进入一个新阶段、使用了 wiki 后：
 
-subagent 的最终回复里要带上 `wiki_usage.md` 路径，以及本次新增或更新的页面标题列表。
+- 在该阶段 `progress.md` 同级写/补 `wiki_usage.md`（4.1 节）
+- 阶段结束时复盘本阶段读过的页面，确认每条 `overall` 分数是否仍准确，必要时调整
+- 整理 subagent 返回的 Markdown 片段追加到同一份 `wiki_usage.md`，但**不要改写** subagent 已写的原因/效果/分数
 
-## 7. 主 Agent 规则
+## 7. 错误处理
 
-主 agent 每进入一个新阶段时，如果使用了 wiki，就在该阶段 `progress.md` 同级的 `wiki_usage.md` 中记录页面使用情况。
-
-单个阶段结束时，主 agent 要评估本阶段实际使用过的 gene 页面是否有用，并把多个分数写回对应 gene 页面标题下。`overall` 只能取 `-1`、`0`、`1`。
-
-如果阶段中调用了 subagent，主 agent 可以整理 subagent 返回的 Markdown 片段并追加到同一个 `wiki_usage.md`，但不要改写 subagent 已经明确给出的原因、效果和分数。
+| 现象 | 处理 |
+|---|---|
+| `wiki_search` 抛错 `MCP server unreachable` 或工具不可见 | 不要伪造结果。提示用户运行 `/wiki-mount` 或 `/reload-plugins`，停止本次查询 |
+| `wiki_search` 返回 `{warning: "..."}`（retriever 失败） | 把 warning 原文写到 `progress.md` "Wiki 查询记录"段；本次查询作废，不继续 get_page |
+| `wiki_get_page` 返回 `errors=[{id, reason}]` | 跳过这些 ID（多半是已归档或拼写错）；不重试 |
+| top-1 候选 summary 完全不沾边 | 重写 query 再试一次；最多重试 1 次仍不沾边 → progress.md 记"wiki 暂无相关知识"，停止 |
+| `wiki_search` 返回 `total=0` | progress.md 记一笔"wiki 暂无相关知识"；继续任务一般流程 |
 
 ## 8. 边界
 
-不要修改 mounted wiki cache、upstream wiki、`experience/q_table.json`。
-
-不要在 query 阶段生成或应用 patch。
-
-需要回流时使用 `/wiki-backflow`。backflow 会把 workspace 中的 `wiki_usage.md` 一并归档到任务 source。
+- 不修改 MCP server / wiki cache / 任何 wiki 仓内容
+- 不调用 `mcp__cann-infer-wiki__wiki_submit_trajectory`（属于 `llm-wiki-backflow`）
+- 不在 query 阶段生成或应用 patch；wiki 是参考，不是命令
+- 任务结束需要回流时使用 `/wiki-backflow`，backflow 会把 `wiki_usage.md` 一并归档到任务 source

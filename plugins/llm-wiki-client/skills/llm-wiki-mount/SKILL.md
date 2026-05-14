@@ -1,23 +1,29 @@
 ---
 name: llm-wiki-mount
-description: 挂载或刷新固定的 LLM-Wiki 仓库。用于 /wiki-mount、刷新 wiki cache、校验 mounted commit、修复项目 CLAUDE.md pin。
+description: 为当前项目挂载 CANN-Infer-Wiki（NPU 大模型推理优化知识库）。两阶段执行：① 确保本机 MCP server 可达（必要时 clone 仓库并拉起服务）；② 在项目 CLAUDE.md 写入 LLM-WIKI pin block。MCP 客户端配置由插件 .mcp.json 自动注册，仅支持本机 localhost:5100。
 allowed-tools: Bash Read Edit Write
-version: 0.1.0
+version: 0.4.0
 ---
 
 # LLM-Wiki Mount
 
 ## 1. 概述
 
-`llm-wiki-mount` 把固定的 LLM-Wiki 仓库挂载到当前 Claude Code 项目。mount 不把 wiki 复制进项目，只维护全局 cache 和 `CLAUDE.md` 中的 pin block。
+`llm-wiki-mount` 把 CANN-Infer-Wiki 的 MCP server 挂载到当前 Claude Code 项目。MCP **客户端配置由插件 root 的 `.mcp.json` 自带**——用户 `claude plugin install llm-wiki-client@llm-wiki` 那一刻就自动注册 `cann-infer-wiki` MCP server；本 skill 不写 `.mcp.json`、不调 `claude mcp add`。
 
-固定输入：
+仅支持**本机部署**，URL 固定为 `http://localhost:5100/mcp`。不支持远程 server、不做端口回退、不读环境变量覆盖。
+
+mount 只负责两件事：① 确保本机 MCP server 进程在 5100 端口跑着；② 在项目 `CLAUDE.md` 注入 LLM-WIKI pin block。
+
+固定常量：
 
 ```text
-repo: git@gitcode.com:AndyKong2020/LLM-Wiki.git
-ref: main
-cache: ~/.claude/llm-wiki/repos/llm-wiki/
-project: ${CLAUDE_PROJECT_DIR:-$PWD}
+repo:      https://gitcode.com/AndyKong2020/CANN-Infer-Wiki.git
+ref:       main
+cache:     ~/.claude/llm-wiki/repos/cann-infer-wiki/
+mcp_url:   http://localhost:5100/mcp
+mcp_port:  5100
+project:   ${CLAUDE_PROJECT_DIR:-$PWD}
 ```
 
 整体流程：
@@ -28,241 +34,229 @@ project: ${CLAUDE_PROJECT_DIR:-$PWD}
     v
 llm-wiki-mount skill
     |
-    +--> 拉取最新 wiki
+    +--> STEP 1: 确保 MCP server 在 localhost:5100 跑着
     |       |
-    |       +--> 检查 cache 路径
-    |       |       |
-    |       |       +--> missing -------------> clone main
-    |       |       +--> ready git repo -------> fast-forward update
-    |       |       +--> invalid -------------> ask user
+    |       +--> 1.1 探活 5100 → 已跑 / 未跑 / 被非 wiki 服务占用
+    |       +--> 1.2 (未跑) cache 三态 → clone / ff / 暂停或重建
+    |       +--> 1.3 (未跑) 前置检查 (claude CLI / pip / IS_SANDBOX)
+    |       +--> 1.4 (未跑) nohup 启动 server
+    |       +--> 1.5 MCP RPC probe (调一次 wiki_search)
+    |       |
+    |       任一步 fail   → STOP，不进 STEP 2，输出诊断
+    |       全步 pass     → 进入 STEP 2
     |
-    +--> 注入 CLAUDE.md
+    +--> STEP 2: 注入 CLAUDE.md pin block
             |
-            +--> 检查 LLM-WIKI pin block
-            +--> 写入 cache_path
-            +--> 汇报 mount 结果
+            +--> 2.1 定位 CLAUDE.md
+            +--> 2.2 生成标准 pin block
+            +--> 2.3 比对/写入 (created / updated / already_current / broken)
+            +--> 2.4 汇报结果
 ```
 
 ## 2. 重要原则
 
-不要向用户询问 repo URL 或 ref。`/wiki-mount` 不接收参数，仓库和分支由本 skill 固定。
+mount 必须幂等。重复调用 `/wiki-mount` 不应破坏已有正确状态；每步都先判"已经是目标态？"再决定是否动手。
 
-不要调用外部脚本。mount 的 git 和 filesystem 操作直接按本 skill 的步骤执行。
+mount **不管客户端 MCP 配置**——那是插件 `.mcp.json` 的事。如果用户卸载/禁用了 plugin，整个 MCP entry 会跟着消失，无需 mount 清理。
 
-mount 必须幂等。cache 已经是最新时不重复 clone；`CLAUDE.md` pin block 内容一致时不重写。
+mount 不要预加载 wiki 内容、不要把 cache 复制进用户项目、不要修改 cache 仓库内的业务文件。客户端永远走 MCP；cache 只是 server 端依赖。
 
-mount 只允许修改两个位置：`~/.claude/llm-wiki/repos/` 下的 wiki cache 目录，以及当前项目 `CLAUDE.md` 中的 LLM-WIKI pin block。不要创建独立的 mount 配置文件。
+invalid 状态（cache 异常、5100 被非 wiki 服务占用）一律暂停并向用户报告，不要默默覆盖或绕过、也不要换端口/换 URL。
 
-cache 路径只归并为三种状态：`missing`、`ready`、`invalid`。不要把 `not git`、`remote mismatch`、`dirty`、`ahead`、`diverged` 暴露成独立流程分支。
+Step 1 任一步骤失败时不要走 Step 2。pin block 写进 CLAUDE.md 但 MCP 不通 → agent 后续调用全部失败，是更糟的失败模式。
 
-`invalid` 表示 cache 路径存在但不能安全复用，包括非 git 目录、remote 不匹配、本地未提交改动、本地已提交但未进入 `origin/main`、或与 `origin/main` 分叉。
+## 3. STEP 1：确保 MCP server 在 localhost:5100 跑着
 
-遇到 `invalid` 时必须暂停并询问用户。给两个选择：暂停 mount，让用户手动处理；或备份当前 cache 并重新 clone 最新 wiki。不要在用户确认前自动覆盖。
-
-不要预加载 wiki 页面，不要复制 wiki 仓库到用户项目，不要修改 mounted wiki cache 中的业务内容。
-
-## 3. 操作步骤
-
-### 3.1 拉取最新 wiki
-
-这一阶段先判断 cache 路径处于哪种状态，再进入对应分支。不要跳过路径探测直接 clone 或 fetch。状态只允许是 `missing`、`ready`、`invalid`。
-
-#### 3.1.1 检查 cache 路径
-
-不要用一整段脚本完成 cache 检查。按顺序执行下面几条短命令，由 agent 根据输出归并状态。能直接根据文件存在性、remote、status 判断的事情，不要再包装成脚本判断器。
-
-先设置固定路径：
+### 3.1 探活 localhost:5100
 
 ```bash
-REPO_URL="git@gitcode.com:AndyKong2020/LLM-Wiki.git"
-CACHE_PATH="${HOME}/.claude/llm-wiki/repos/llm-wiki"
+curl --noproxy '*' -sI -o /dev/null -w '%{http_code}' --max-time 3 http://localhost:5100/mcp
 ```
 
-判断路径是否存在：
+| 返回 | 含义 | 下一步 |
+|---|---|---|
+| `200`/`401`/`405`/`406` | wiki MCP server 已在跑 | 跳到 3.5 |
+| `000`（连不上） | 端口空闲，未跑 | 进 3.2 |
+| `502`/`504` 或其它 2xx/3xx | 5100 被非 wiki 服务占用 | **报错并停止**：告诉用户 5100 被占，请杀掉占用进程后重新 `/wiki-mount`；不要换端口 |
+
+curl 一直返回 0/超时但 `ss -tln \| grep :5100` 显示端口被占的情况，等同"被非 wiki 服务占用"分支处理。
+
+如果 curl 一直 0，确认下 shell 没设代理覆盖 localhost：
 
 ```bash
-CACHE_PATH="${HOME}/.claude/llm-wiki/repos/llm-wiki"
-test -e "$CACHE_PATH" && printf 'exists\n' || printf 'missing\n'
+export NO_PROXY=127.0.0.1,localhost
+export no_proxy=127.0.0.1,localhost
 ```
 
-如果输出 `missing`，状态就是 `missing`，直接进入 `3.1.2`。
-
-如果路径存在，确认它是不是 git repo：
+### 3.2 Cache 三态处理（仅未跑）
 
 ```bash
-CACHE_PATH="${HOME}/.claude/llm-wiki/repos/llm-wiki"
-test -d "$CACHE_PATH/.git" && printf 'git_repo\n' || printf 'invalid\n'
-```
-
-如果输出 `invalid`，状态就是 `invalid`，进入 `3.1.4`。
-
-如果是 git repo，检查 remote：
-
-```bash
-CACHE_PATH="${HOME}/.claude/llm-wiki/repos/llm-wiki"
-git -C "$CACHE_PATH" config --get remote.origin.url
-```
-
-输出必须等于 `git@gitcode.com:AndyKong2020/LLM-Wiki.git`。否则状态是 `invalid`，进入 `3.1.4`。
-
-remote 正确后，检查是否有未提交改动：
-
-```bash
-CACHE_PATH="${HOME}/.claude/llm-wiki/repos/llm-wiki"
-git -C "$CACHE_PATH" status --porcelain
-```
-
-输出为空时，状态暂定为 `ready`。输出非空时，状态是 `invalid`，进入 `3.1.4`。
-
-最后确认本地 `HEAD` 是否能安全对齐远端：
-
-```bash
-CACHE_PATH="${HOME}/.claude/llm-wiki/repos/llm-wiki"
-git -C "$CACHE_PATH" fetch origin main --prune
-git -C "$CACHE_PATH" rev-parse HEAD
-git -C "$CACHE_PATH" rev-parse origin/main
-git -C "$CACHE_PATH" merge-base --is-ancestor HEAD origin/main && printf 'safe_to_update\n' || printf 'invalid\n'
-```
-
-如果本地 `HEAD` 等于 `origin/main`，状态是 `ready`，进入 `3.1.3` 后会得到 `already_latest`。如果输出 `safe_to_update`，状态是 `ready`，进入 `3.1.3` 后会 fast-forward。否则状态是 `invalid`，进入 `3.1.4`。
-
-根据 `cache_state` 选择下一步：
-
-- `missing`：执行 `3.1.2`。
-- `ready`：执行 `3.1.3`。
-- `invalid`：执行 `3.1.4`。
-
-#### 3.1.2 cache 不存在时 clone
-
-仅当 `cache_state=missing` 时执行：
-
-```bash
-set -euo pipefail
-
-REPO_URL="git@gitcode.com:AndyKong2020/LLM-Wiki.git"
-REF="main"
 CACHE_ROOT="${HOME}/.claude/llm-wiki/repos"
-CACHE_PATH="${CACHE_ROOT}/llm-wiki"
+CACHE_PATH="${CACHE_ROOT}/cann-infer-wiki"
+REPO_HTTPS="https://gitcode.com/AndyKong2020/CANN-Infer-Wiki.git"
+REF="main"
+```
 
-mkdir -p "$CACHE_ROOT"
+按顺序判 cache 状态：
 
-remote_commit="$(git ls-remote "$REPO_URL" "refs/heads/$REF" | awk '{print $1}')"
-if [ -z "$remote_commit" ]; then
-  printf 'ok=false\n'
-  printf 'error_code=remote_ref_not_found\n'
-  printf 'message=找不到远端 ref：%s\n' "$REF"
+```bash
+# 路径不存在 → missing
+test -e "$CACHE_PATH" || echo missing
+
+# 路径存在但不是 git → invalid
+test -d "$CACHE_PATH/.git" || echo invalid
+
+# remote 不匹配 → invalid
+git -C "$CACHE_PATH" config --get remote.origin.url   # 必须等于 $REPO_HTTPS
+
+# dirty → invalid
+git -C "$CACHE_PATH" status --porcelain               # 必须为空
+
+# 与 origin/main 分叉 → invalid；HEAD == origin/main 或可 ff → ready
+git -C "$CACHE_PATH" fetch origin "$REF" --prune
+git -C "$CACHE_PATH" merge-base --is-ancestor HEAD "origin/$REF"
+```
+
+按状态走对应分支：
+
+- **missing**：
+  ```bash
+  mkdir -p "$CACHE_ROOT"
+  git clone --branch "$REF" --single-branch "$REPO_HTTPS" "$CACHE_PATH"
+  ```
+  clone 失败 → 报错停止 mount，**不要回退 SSH**（HTTPS 是固定协议）。
+
+- **ready 且 HEAD == origin/main**：什么都不做，进 3.3。
+
+- **ready 但 HEAD 落后**：
+  ```bash
+  git -C "$CACHE_PATH" merge --ff-only "origin/$REF"
+  ```
+  ff 失败 → 视作 invalid。
+
+- **invalid**：向用户说明具体 invalid 原因（非 git 目录 / remote 不匹配 / dirty / 分叉等），给两个选择：
+  - A. 暂停 mount，让用户手工处理 cache 后重新 `/wiki-mount`
+  - B. 备份当前 cache 后重新 clone 最新 main
+
+  只有用户选 B 才执行：
+  ```bash
+  BACKUP_PATH="${CACHE_PATH}.backup.$(date '+%Y%m%d%H%M%S')"
+  mv "$CACHE_PATH" "$BACKUP_PATH"
+  git clone --branch "$REF" --single-branch "$REPO_HTTPS" "$CACHE_PATH"
+  ```
+
+### 3.3 启动前置检查（仅未跑）
+
+任一缺失 → **错误退出，不要自动安装/绕过**，向用户报告缺什么。
+
+```bash
+# claude CLI 在 PATH（server 的 claude-agent retriever 模式必备）
+which claude || { echo "missing: claude CLI"; exit 1; }
+
+# Python 依赖（全局安装，不创建 venv）
+pip install -q -r "$CACHE_PATH/mcp-server/requirements.txt"
+
+# root 部署需要 IS_SANDBOX=1
+if [ "$(id -u)" = "0" ] && [ "${IS_SANDBOX:-0}" != "1" ]; then
+  echo "missing: 当前以 root 运行但未设 IS_SANDBOX=1。请先 export IS_SANDBOX=1 后重新 /wiki-mount"
   exit 1
 fi
-
-git clone --branch "$REF" --single-branch "$REPO_URL" "$CACHE_PATH" >/dev/null
-
-printf 'ok=true\n'
-printf 'cache_status=cloned\n'
-printf 'cache_path=%s\n' "$CACHE_PATH"
 ```
 
-#### 3.1.3 cache 已存在时更新
+### 3.4 启动 server（仅未跑）
 
-仅当 `cache_state=ready` 时执行：
+只在 5100 启动，**不做端口回退**：
 
 ```bash
-set -euo pipefail
-
-REF="main"
-CACHE_PATH="${HOME}/.claude/llm-wiki/repos/llm-wiki"
-
-current_branch="$(git -C "$CACHE_PATH" rev-parse --abbrev-ref HEAD)"
-if [ "$current_branch" != "$REF" ]; then
-  git -C "$CACHE_PATH" checkout "$REF" >/dev/null
-fi
-
-local_before="$(git -C "$CACHE_PATH" rev-parse HEAD)"
-remote_commit="$(git -C "$CACHE_PATH" rev-parse "origin/$REF")"
-
-if [ "$local_before" = "$remote_commit" ]; then
-  cache_status="already_latest"
-else
-  git -C "$CACHE_PATH" merge --ff-only "origin/$REF" >/dev/null
-  cache_status="updated"
-fi
-
-printf 'ok=true\n'
-printf 'cache_status=%s\n' "$cache_status"
-printf 'cache_path=%s\n' "$CACHE_PATH"
+LOG_FILE="$CACHE_PATH/mcp.log"
+cd "$CACHE_PATH/mcp-server"
+nohup python -u server.py --port 5100 --host 127.0.0.1 \
+    > "$LOG_FILE" 2>&1 &
+disown $! 2>/dev/null || true
 ```
 
-#### 3.1.4 invalid 处理
-
-`invalid` 状态下先暂停，向用户说明 cache 路径和 invalid 原因，然后让用户选择：
-
-- 暂停 mount，让用户手动处理 cache。
-- 备份当前 cache，并重新 clone 最新 wiki 覆盖标准 cache 路径。
-
-用户选择暂停时，停止 mount，不改 `CLAUDE.md`。
-
-用户选择重新 clone 时，先把旧 cache 移到同一 cache root 下的备份目录，再重新 clone 最新 wiki 到标准 cache 路径。执行：
+等待并校验启动成功：
 
 ```bash
-set -euo pipefail
-
-REPO_URL="git@gitcode.com:AndyKong2020/LLM-Wiki.git"
-REF="main"
-CACHE_ROOT="${HOME}/.claude/llm-wiki/repos"
-CACHE_PATH="${CACHE_ROOT}/llm-wiki"
-BACKUP_PATH="${CACHE_PATH}.backup.$(date '+%Y%m%d%H%M%S')"
-
-if [ -e "$CACHE_PATH" ]; then
-  mv "$CACHE_PATH" "$BACKUP_PATH"
-fi
-
-mkdir -p "$CACHE_ROOT"
-git clone --branch "$REF" --single-branch "$REPO_URL" "$CACHE_PATH" >/dev/null
-
-printf 'ok=true\n'
-printf 'cache_status=recloned\n'
-printf 'cache_path=%s\n' "$CACHE_PATH"
-printf 'backup_path=%s\n' "$BACKUP_PATH"
+sleep 5
+grep -E "Uvicorn running" "$LOG_FILE" \
+    || { echo "server 起不来，看 $LOG_FILE 末尾 30 行"; exit 1; }
 ```
 
-重新 clone 成功后进入 `3.2`。
+`Uvicorn running` 出现且没有 `address already in use` 才算起来。
 
-### 3.2 注入 CLAUDE.md
+### 3.5 MCP RPC probe
 
-这一阶段只处理当前项目的 `CLAUDE.md`。它不会读取 wiki 内容，也不会改动 pin block 之外的文本。
+不要只看 `claude mcp list` 显示 Connected——那只代表 HTTP 握手通，不能发现"工具没注册 / index loader 挂 / retriever 错误"一类暗病。直接调用一次：
 
-#### 3.2.1 定位文件
+```text
+mcp__cann-infer-wiki__wiki_search(query="mount probe", limit=1)
+```
 
-`CLAUDE.md` 位于当前项目根目录。项目目录优先使用 `CLAUDE_PROJECT_DIR`，否则使用当前工作目录。
+期望返回 `{results, total}` 且无 `warning` 字段。如：
 
-不要用脚本修改 `CLAUDE.md`。直接读取文件内容，按下面规则用文件编辑能力完成更新。
+- 返回 `{results: [...], total: N}` → probe 通过，进 STEP 2
+- 返回 `{warning: "..."}` → 输出 warning 原文 + server log 末尾 30 行，停止 mount
+- 工具不存在（`mcp__cann-infer-wiki__*` 在 agent 工具列表里看不到） → 让用户在当前会话跑 `/reload-plugins`，reload 完重新 `/wiki-mount`
 
-#### 3.2.2 使用的 pin block
+## 4. STEP 2：注入 CLAUDE.md
 
-标准 block 使用下面的格式。`cache_path` 使用前面步骤输出的 cache path。
+### 4.1 定位 CLAUDE.md
+
+```bash
+CLAUDE_MD="${CLAUDE_PROJECT_DIR:-$PWD}/CLAUDE.md"
+```
+
+不要写到 `.claude/CLAUDE.md`，本 skill 只管理项目根 `CLAUDE.md`。
+
+### 4.2 标准 pin block
 
 ```md
 <!-- LLM-WIKI:BEGIN -->
-本项目已挂载 LLM-Wiki。
-cache_path: <absolute cache path>
-涉及 LLM/NPU optimization、model、kernel、framework、quantization、parallelism、case、gene、capsule、source、新优化阶段、方案分析、策略选择或 debug 调试时，必须使用 llm-wiki-query skill。
-涉及 subagent 拉起，需让 subagent 使用 llm-wiki-query skill。
-使用 llm-wiki-query 后，必须把页面级记录写到当前阶段 progress.md 同级的 wiki_usage.md，并把查询摘要同步写入 progress.md。
-按需从 mounted cache 读取 wiki 内容，不要预加载整个 wiki。
+本项目已挂载 CANN-Infer-Wiki（NPU Atlas A3 / Ascend910 系列大模型推理优化知识库）。
+mcp_url: http://localhost:5100/mcp
+
+涉及下列任务时必须使用 llm-wiki-query skill：
+- 静态知识查询：model / kernel / parallelism / module / framework / technique / quantization / platform
+  （模型族 qwen3-moe / deepseek-r1 / hunyuan-* / longcat-* / kimi-k2 等；算子 fia / mla / dia / sparse-flash-attention 等；并行 tp / dp / cp / ep / zigzag-cp / ulysses 等；框架 sglang / torchair / pypto / ascendc / atb / catlass / tilelang 等；技术 npu-graph-mode / weight-prefetch / superkernel / afd 等；量化 w8a8c8 / w4a8c8 / mxfp8 / fp8-attention 等；平台 atlas-a3 / ascend910 等）
+- 动态知识查询：任务回流型经验，如调试策略、bringup 路径、性能调优梯子
+- 进入新优化阶段、做方案分析、策略选择、debug 调试、性能/精度回归归因时
+
+涉及 subagent 拉起时，需让 subagent 同样使用 llm-wiki-query skill。
+
+知识检索一律通过 MCP 工具：mcp__cann-infer-wiki__wiki_search、mcp__cann-infer-wiki__wiki_get_page。
+不要预加载或穷举 wiki；不要绕开 MCP 直接读 ~/.claude/llm-wiki/repos/ 下的 cache 文件。
+
+每次使用 llm-wiki-query 后，必须把页面级记录写到当前阶段 progress.md 同级的 wiki_usage.md，
+并把查询摘要同步写入 progress.md。
 <!-- LLM-WIKI:END -->
 ```
 
-#### 3.2.3 编辑规则
+### 4.3 编辑规则
 
-如果 `CLAUDE.md` 不存在，创建文件，内容就是填入实际 `cache_path` 后的标准 block，并记 `claude_md_status=created`。
+文件不存在 → 创建 CLAUDE.md，内容就是上述 block，记 `claude_md_status=created`。
 
-如果 `CLAUDE.md` 同时存在 `<!-- LLM-WIKI:BEGIN -->` 和 `<!-- LLM-WIKI:END -->`，只比较并替换这两个标记之间的完整 block。内容一致时不编辑，记 `claude_md_status=already_current`；内容不一致时只替换 block 内文本，记 `claude_md_status=updated`。
+文件存在但**不含**任何 LLM-WIKI 标记 → 在文件末尾追加 block（原文末尾如缺空行先补一行），记 `claude_md_status=created`。
 
-如果 `CLAUDE.md` 不包含任何 LLM-WIKI 标记，把标准 block 追加到文件末尾。追加前保留原文，原文末尾补一个空行，记 `claude_md_status=created`。
+文件存在且**同时含** `<!-- LLM-WIKI:BEGIN -->` 与 `<!-- LLM-WIKI:END -->` → 把两者之间的内容与标准 block 内容比对：
+- 完全一致 → 记 `claude_md_status=already_current`
+- 不一致 → 用标准 block 替换中间内容（不动 BEGIN/END 标记本身的位置），记 `claude_md_status=updated`
 
-如果 `CLAUDE.md` 只存在开始标记或只存在结束标记，停止 mount。汇报 `error_code=claude_pin_broken`，要求用户先手动修复该文件。
+文件存在但只含 BEGIN 或只含 END → **停止 mount**，记 `error_code=claude_pin_broken`，让用户先手动修复 CLAUDE.md（pin block 残缺通常意味着外部工具改坏了）。
 
-### 3.3 汇报结果
+## 5. 汇报结果
 
-两个一级步骤都成功后，只汇报这些字段：`cache_status`、`cache_path`、`claude_md_status`。
+mount 全流程结束后，按顺序输出以下字段（每行一个 `key=value`）：
 
-不要转述完整命令输出，不要展开 cache 内部文件列表。
+```text
+cache_status=<cloned | updated | already_latest | recloned | aborted>
+server_status=<already_running | started | failed>
+mcp_probe=<rpc_ok | tool_not_found_reload_required | failed>
+claude_md_status=<created | updated | already_current | broken>
+cache_path=<absolute cache path>
+server_log=<absolute log path>
+```
+
+不要展开完整 server log、cache 目录或 wiki index 文件列表。
+
+如果 `mcp_probe=tool_not_found_reload_required`，最后用一行提示用户：在当前会话中运行 `/reload-plugins` 后重新 `/wiki-mount`。

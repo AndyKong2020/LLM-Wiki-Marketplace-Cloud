@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "cann-infer-wiki": {
+      "type": "http",
+      "url": "http://localhost:5100/mcp"
+    }
+  }
+}
