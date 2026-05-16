@@ -1,7 +1,7 @@
 ---
-name: llm-wiki-query
+name: llm-wiki-cloud-query
 description: 查询和运行时消费已挂载的 CANN-Infer-Wiki（通过 MCP）。进入新的 LLM/NPU 推理优化阶段、做方案分析、策略选择、debug 调试、性能/精度回归分析；涉及具体 model / kernel / parallelism / module / framework / technique / quantization / platform 知识、或动态层任务回流型经验时使用。
-allowed-tools: Read Edit Write mcp__cann-infer-wiki__wiki_search mcp__cann-infer-wiki__wiki_get_page
+allowed-tools: Read Edit Write mcp__cann-infer-wiki-cloud__wiki_search mcp__cann-infer-wiki-cloud__wiki_get_page
 version: 0.3.0
 ---
 
@@ -9,7 +9,7 @@ version: 0.3.0
 
 ## 1. 触发查询的场景
 
-本 skill 是真实任务运行时的 wiki 入口。CLAUDE.md 中由 `/wiki-mount` 写入的 LLM-WIKI pin block 已经列出"哪些任务阶段必须查 wiki"，不要在临时判断中绕开它。
+本 skill 是真实任务运行时的 wiki 入口。CLAUDE.md 中由 `/wiki-cloud-mount` 写入的 LLM-WIKI pin block 已经列出"哪些任务阶段必须查 wiki"，不要在临时判断中绕开它。
 
 下列任一情况发生时必须查 wiki：
 
@@ -24,7 +24,7 @@ version: 0.3.0
 
 ## 2. 重要原则
 
-**通过 MCP 查询**。永远通过 `mcp__cann-infer-wiki__wiki_search` 与 `mcp__cann-infer-wiki__wiki_get_page` 获取知识。
+**通过 MCP 查询**。永远通过 `mcp__cann-infer-wiki-cloud__wiki_search` 与 `mcp__cann-infer-wiki-cloud__wiki_get_page` 获取知识。
 
 `wiki_search` 返回 `warning`（retriever 失败）→ 据实上报给用户与 progress.md。
 
@@ -62,7 +62,7 @@ wiki_search(query="...", tags=["fia", "decode"], limit=5)
 ### 3.2 wiki_search
 
 ```text
-mcp__cann-infer-wiki__wiki_search(query="<上一节拟好的 query>", limit=5)
+mcp__cann-infer-wiki-cloud__wiki_search(query="<上一节拟好的 query>", limit=5)
 ```
 
 返回 `{results: [{id, summary, tags, score, qValue}, ...], total}`。这就是 server 已经排好序的 topK，**直接用**：
@@ -75,7 +75,7 @@ mcp__cann-infer-wiki__wiki_search(query="<上一节拟好的 query>", limit=5)
 ### 3.3 wiki_get_page
 
 ```text
-mcp__cann-infer-wiki__wiki_get_page(
+mcp__cann-infer-wiki-cloud__wiki_get_page(
     ids=["wiki_static_cann-infer_models_qwen3-moe_md", ...]
 )
 ```
@@ -97,7 +97,7 @@ TODO:链接下探
 
 ### 3.4 应用 + 记录
 
-把读到的内容应用到当前任务。如要拉起 subagent ，**在 prompt 里明确要求 subagent 也用 `llm-wiki-query` skill 和当前任务的 `wiki_usage.md`路径**（路径见 5 节）。
+把读到的内容应用到当前任务。如要拉起 subagent ，**在 prompt 里明确要求 subagent 也用 `llm-wiki-cloud-query` skill 和当前任务的 `wiki_usage.md`路径**（路径见 5 节）。
 
 每次 `wiki_get_page` 取过的页都要写到 `wiki_usage.md`（4.1 节）；本次查询对阶段判断有影响时，同步在 `progress.md` 追加 wiki 查阅记录（4.2 节）。
 
@@ -170,9 +170,8 @@ subagent 使用本 skill 时必须遵守：
 
 | 现象 | 处理 |
 |---|---|
-| `wiki_search` 抛错 `MCP server unreachable` 或工具不可见 | 不要伪造结果。提示用户运行 `/wiki-mount` 或 `/reload-plugins`，停止本次查询 |
+| `wiki_search` 抛错 `MCP server unreachable` 或工具不可见 | 不要伪造结果。提示用户运行 `/wiki-cloud-mount` 或 `/reload-plugins`，停止本次查询 |
 | `wiki_search` 返回 `{warning: "..."}`（retriever 失败） | 把 warning 原文写到 `progress.md` "Wiki 查询记录"段；本次查询作废，不继续 get_page |
 | `wiki_get_page` 返回 `errors=[{id, reason}]` | 跳过这些 ID（多半是已归档或拼写错）；不重试 |
 | top-1 候选 summary 完全不沾边 | 重写 query 再试一次；最多重试 1 次仍不沾边 → progress.md 记"wiki 暂无相关知识"，停止 |
 | `wiki_search` 返回 `total=0` | progress.md 记一笔"wiki 暂无相关知识"；继续任务一般流程 |
-

@@ -2,7 +2,7 @@
 
 本仓库是 **CANN-Infer-Wiki**（NPU 大模型推理优化知识库）的 Claude Code 云端客户端插件市场，只维护用户端插件和安装入口。Wiki 知识库内容与云端 MCP 服务由独立仓库维护，用户端不 clone wiki 仓、不启动本机 server。
 
-> Marketplace 名字仍是 `llm-wiki`、插件名仍是 `llm-wiki-client`——保留这套命名以便未来同 marketplace 下挂多个 LLM-Wiki 系列插件；当前唯一的 plugin 把内容指向 CANN-Infer-Wiki。
+> Cloud marketplace 名字是 `llm-wiki-cloud`，插件安装目标是 `llm-wiki-client@llm-wiki-cloud`。这样它可以和旧的本地版 `llm-wiki-client@llm-wiki` 并存，不会抢同一个 marketplace/plugin 解析入口。
 
 ## 安装
 
@@ -15,23 +15,22 @@ claude plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud --scope us
 安装客户端插件：
 
 ```bash
-claude plugin install llm-wiki-client@llm-wiki --scope user
+claude plugin install llm-wiki-client@llm-wiki-cloud --scope user
 ```
 
-安装那一刻插件自带的 `.mcp.json` 被 Claude Code 加载，`cann-infer-wiki` MCP server 自动注册到客户端配置（HTTP transport，HTTPS URL `https://wiki.andykong.top/mcp`）。
+安装那一刻插件自带的 `.mcp.json` 被 Claude Code 加载，`cann-infer-wiki-cloud` MCP server 自动注册到客户端配置（HTTP transport，HTTPS URL `https://wiki.andykong.top/mcp`）。
 
 安装后在需要使用 wiki 的项目中执行：
 
 ```text
-/wiki-mount
+/wiki-cloud-mount
 ```
 
-如果本机以前添加过旧 marketplace（`AndyKong2020/LLM-Wiki-Marketplace`），先切到 Cloud 仓：
+如果本机以前添加过旧 marketplace（`AndyKong2020/LLM-Wiki-Marketplace`），不需要删除旧 marketplace；Cloud 版使用独立名字和独立命令。若旧插件仍处于 enabled，建议先禁用旧版，避免 agent 同时看到新旧两套 wiki 入口：
 
 ```bash
-claude plugin marketplace remove llm-wiki
 claude plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud --scope user
-claude plugin install llm-wiki-client@llm-wiki --scope user
+claude plugin install llm-wiki-client@llm-wiki-cloud --scope user
 ```
 
 如果插件已经在当前 Claude Code 会话中加载过，安装或更新后运行：
@@ -40,12 +39,12 @@ claude plugin install llm-wiki-client@llm-wiki --scope user
 /reload-plugins
 ```
 
-`/wiki-mount` 会：
+`/wiki-cloud-mount` 会：
 
 1. 探活云端 MCP（调用一次 `wiki_search`）确认链路通。
 2. 在项目 `CLAUDE.md` 写入 `<!-- LLM-WIKI:BEGIN -->...<!-- LLM-WIKI:END -->` pin block，告诉 agent 何时调 wiki。
 
-后续真实任务结束后，可以使用 `/wiki-backflow` 创建本地任务现场归档。当前云端只读 MVP 不暴露 `wiki_submit_trajectory`，所以默认停在上传前；回流上传流程保留在插件内，等后续私有上传/鉴权入口接上后恢复。
+后续真实任务结束后，可以使用 `/wiki-cloud-backflow` 创建本地任务现场归档。当前云端只读 MVP 不暴露 `wiki_submit_trajectory`，所以默认停在上传前；回流上传流程保留在插件内，等后续私有上传/鉴权入口接上后恢复。
 
 ## 仓库边界
 
@@ -60,7 +59,7 @@ claude plugin install llm-wiki-client@llm-wiki --scope user
 ```bash
 cd /path/to/LLM-Wiki-Marketplace
 claude plugin marketplace add "$(pwd)" --scope user
-claude plugin install llm-wiki-client@llm-wiki --scope user
+claude plugin install llm-wiki-client@llm-wiki-cloud --scope user
 ```
 
 修改插件后执行校验：

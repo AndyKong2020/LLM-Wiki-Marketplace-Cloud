@@ -1,5 +1,5 @@
 ---
-name: llm-wiki-backflow
+name: llm-wiki-cloud-backflow
 description: 任务结束后使用。无参数触发，由 agent 判断 task slug 和 workspace，在本地归档真实任务轨迹；上传流程保留为后续私有入口启用。
 allowed-tools: Bash Read Write
 version: 0.3.0
@@ -10,7 +10,7 @@ version: 0.3.0
 本 skill 包含 **轨迹归档** 和后续将恢复的 **轨迹上传** 具体操作。当前云端只读 MVP 不暴露 `wiki_submit_trajectory`，所以默认只执行第 1 步并停在上传前。
 
 ```text
-/wiki-backflow
+/wiki-cloud-backflow
     |
     +--> 1. 轨迹归档：把本次任务整理成本地目录 .claude/llm-wiki/backflow/<task-slug>/
     |     （顶层 <task-slug>.md + workspace/ 等附件）
@@ -25,7 +25,7 @@ version: 0.3.0
 
 ### 1.1 判断 Task Slug 和 Workspace
 
-不要要求 `/wiki-backflow` 传入参数。流程核心是确定 `task-slug`，不是确定 task name。
+不要要求 `/wiki-cloud-backflow` 传入参数。流程核心是确定 `task-slug`，不是确定 task name。
 
 `task-slug` 固定为：
 
@@ -158,11 +158,11 @@ backflow/<task-slug>/
 
 ## 2. 轨迹上传（后续启用）
 
-当前云端只读 MVP 不执行本节；本节作为后续私有上传/鉴权入口的保留流程。只有当插件配置明确提供可用的 `mcp__cann-infer-wiki__wiki_submit_trajectory` 工具，并且用户确认开启回流时，才进入下面步骤。
+当前云端只读 MVP 不执行本节；本节作为后续私有上传/鉴权入口的保留流程。只有当插件配置明确提供可用的 `mcp__cann-infer-wiki-cloud__wiki_submit_trajectory` 工具，并且用户确认开启回流时，才进入下面步骤。
 
 轨迹上传只在用户确认后执行。上传走 MCP 工具 `wiki_submit_trajectory`——单次调用把整个 `backflow/<task-slug>/` 目录的文件原样送到 server 端的 `sources/sessions/uploaded/<session_id>/`，server 端 monitor 接力跑 ingest pipeline。
 
-不需要 fork、不需要 PR、不需要 GitCode API；MCP 客户端配置由插件 `.mcp.json` 自带，`/wiki-mount` 已确认 MCP 可达。
+不需要 fork、不需要 PR、不需要 GitCode API；MCP 客户端配置由插件 `.mcp.json` 自带，`/wiki-cloud-mount` 已确认 MCP 可达。
 
 ### 2.1 准备 files 数组
 
@@ -214,7 +214,7 @@ assert "/" not in session_id and "\\" not in session_id, f"session_id must not c
 ### 2.2 调用 wiki_submit_trajectory
 
 ```text
-mcp__cann-infer-wiki__wiki_submit_trajectory(
+mcp__cann-infer-wiki-cloud__wiki_submit_trajectory(
     session_id="<task-slug>",
     files=[ ... ]
 )
@@ -241,6 +241,6 @@ mcp__cann-infer-wiki__wiki_submit_trajectory(
 | `status: error, message: "session already exists: ..."` | 该 `session_id` 已上传过。问用户：① 用 `-r2`/`-r3` 后缀重起一次 backflow ② 或就此停止 |
 | `status: error, message: "upload root must contain exactly one top-level .md file, got ..."` | 顶层 `.md` 文件不是恰好 1 个（0 个或 ≥2 个）。回到 1.4 调整后重试 |
 | `status: error, message: "files[i].content invalid base64 ..."` 或 `unsafe path component ...` | 2.1 编码或路径构造出问题，复查 `name` / `content` 字段 |
-| MCP 不可达 / 工具不可见 | 告诉用户先跑 `/wiki-mount` 确认 server 就绪后再 `/wiki-backflow`；本地 archive 已经在 `.claude/llm-wiki/backflow/<task-slug>/`，下次直接复用 |
+| MCP 不可达 / 工具不可见 | 告诉用户先跑 `/wiki-cloud-mount` 确认 server 就绪后再 `/wiki-cloud-backflow`；本地 archive 已经在 `.claude/llm-wiki/backflow/<task-slug>/`，下次直接复用 |
 
 不要伪造成功响应；不要对 `status: error` 的响应抑制错误信息后伪装成功。Server 端 monitor 接力之后用户可以通过 `tail -f <cache>/mcp.log` 观察 ingest 进度（可选）。
