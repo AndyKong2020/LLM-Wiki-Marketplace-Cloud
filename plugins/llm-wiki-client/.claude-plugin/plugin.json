@@ -1,7 +1,7 @@
 {
   "name": "llm-wiki-client",
-  "version": "0.3.0",
-  "description": "在 Claude Code 中挂载、查询并回流 CANN-Infer-Wiki（NPU 大模型推理优化知识库）。通过插件 .mcp.json 自动注册 cann-infer-wiki MCP server。",
+  "version": "0.4.0",
+  "description": "在 Claude Code 中查询云端 CANN-Infer-Wiki（NPU 大模型推理优化知识库），并保留任务回流归档流程。通过插件 .mcp.json 自动注册远程 cann-infer-wiki MCP server。",
   "author": {
     "name": "AndyKong"
   },
@@ -11,6 +11,6 @@
     "npu",
     "mcp",
     "backflow",
-    "gitcode"
+    "cloud"
   ]
 }

@@ -1,13 +1,13 @@
 ---
 name: llm-wiki-backflow
-description: 任务结束后使用。无参数触发，由 agent 判断 task slug 和 workspace，先在本地归档真实任务轨迹，再在用户确认后通过 MCP wiki_submit_trajectory 直接回流到 CANN-Infer-Wiki。
-allowed-tools: Bash Read Write mcp__cann-infer-wiki__wiki_submit_trajectory
-version: 0.2.0
+description: 任务结束后使用。无参数触发，由 agent 判断 task slug 和 workspace，在本地归档真实任务轨迹；上传流程保留为后续私有入口启用。
+allowed-tools: Bash Read Write
+version: 0.3.0
 ---
 
 # LLM-Wiki Backflow
 
-本 skill 包含 **轨迹归档** 和 **轨迹上传** 的具体操作。
+本 skill 包含 **轨迹归档** 和后续将恢复的 **轨迹上传** 具体操作。当前云端只读 MVP 不暴露 `wiki_submit_trajectory`，所以默认只执行第 1 步并停在上传前。
 
 ```text
 /wiki-backflow
@@ -15,7 +15,7 @@ version: 0.2.0
     +--> 1. 轨迹归档：把本次任务整理成本地目录 .claude/llm-wiki/backflow/<task-slug>/
     |     （顶层 <task-slug>.md + workspace/ 等附件）
     |
-    +--> 2. 轨迹上传：用户确认后，调用 wiki_submit_trajectory MCP 工具，
+    +--> 2. 轨迹上传（暂未启用）：用户确认后，调用 wiki_submit_trajectory MCP 工具，
           单次把整个目录上传到 CANN-Infer-Wiki 的 sources/sessions/uploaded/<session_id>/
 ```
 
@@ -154,9 +154,11 @@ backflow/<task-slug>/
 - 排除了哪些重要文件以及原因
 - 即将作为 `session_id` 的值
 
-在用户确认前，不进入轨迹上传。
+当前云端只读 MVP 下，无论用户是否确认，都不要调用 `wiki_submit_trajectory`；汇报 archive 已准备好，并说明上传会在后续私有入口启用后恢复。
 
-## 2. 轨迹上传
+## 2. 轨迹上传（后续启用）
+
+当前云端只读 MVP 不执行本节；本节作为后续私有上传/鉴权入口的保留流程。只有当插件配置明确提供可用的 `mcp__cann-infer-wiki__wiki_submit_trajectory` 工具，并且用户确认开启回流时，才进入下面步骤。
 
 轨迹上传只在用户确认后执行。上传走 MCP 工具 `wiki_submit_trajectory`——单次调用把整个 `backflow/<task-slug>/` 目录的文件原样送到 server 端的 `sources/sessions/uploaded/<session_id>/`，server 端 monitor 接力跑 ingest pipeline。
 

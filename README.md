@@ -1,6 +1,6 @@
 # LLM-Wiki Marketplace
 
-本仓库是 **CANN-Infer-Wiki**（NPU 大模型推理优化知识库）的 Claude Code 插件市场，只维护用户端插件和安装入口。Wiki 知识库内容由 `https://gitcode.com/AndyKong2020/CANN-Infer-Wiki.git` 维护（包含 MCP server、ingest 引擎、wiki 静态/动态页面），插件发布与 wiki 内容更新彼此解耦。
+本仓库是 **CANN-Infer-Wiki**（NPU 大模型推理优化知识库）的 Claude Code 云端客户端插件市场，只维护用户端插件和安装入口。Wiki 知识库内容与云端 MCP 服务由独立仓库维护，用户端不 clone wiki 仓、不启动本机 server。
 
 > Marketplace 名字仍是 `llm-wiki`、插件名仍是 `llm-wiki-client`——保留这套命名以便未来同 marketplace 下挂多个 LLM-Wiki 系列插件；当前唯一的 plugin 把内容指向 CANN-Infer-Wiki。
 
@@ -9,7 +9,7 @@
 添加 marketplace：
 
 ```bash
-claude plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace --scope user
+claude plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud --scope user
 ```
 
 安装客户端插件：
@@ -18,7 +18,7 @@ claude plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace --scope user
 claude plugin install llm-wiki-client@llm-wiki --scope user
 ```
 
-安装那一刻插件自带的 `.mcp.json` 被 Claude Code 加载，`cann-infer-wiki` MCP server 自动注册到客户端配置（HTTP，URL `http://localhost:5100/mcp`）。
+安装那一刻插件自带的 `.mcp.json` 被 Claude Code 加载，`cann-infer-wiki` MCP server 自动注册到客户端配置（HTTP，URL `http://124.220.212.101/mcp`）。
 
 安装后在需要使用 wiki 的项目中执行：
 
@@ -28,17 +28,16 @@ claude plugin install llm-wiki-client@llm-wiki --scope user
 
 `/wiki-mount` 会：
 
-1. 检查 `localhost:5100` 上 MCP server 是否在跑；未跑则按 `~/.claude/llm-wiki/repos/cann-infer-wiki/` 三态（missing/ready/invalid）clone 或 fast-forward 仓库到 cache，再 `nohup` 拉起 server。
-2. 探活 MCP（调用一次 `wiki_search`）确认链路通。
-3. 在项目 `CLAUDE.md` 写入 `<!-- LLM-WIKI:BEGIN -->...<!-- LLM-WIKI:END -->` pin block，告诉 agent 何时调 wiki。
+1. 探活云端 MCP（调用一次 `wiki_search`）确认链路通。
+2. 在项目 `CLAUDE.md` 写入 `<!-- LLM-WIKI:BEGIN -->...<!-- LLM-WIKI:END -->` pin block，告诉 agent 何时调 wiki。
 
-后续真实任务结束后，可以使用 `/wiki-backflow` 把任务现场目录通过 `mcp__cann-infer-wiki__wiki_submit_trajectory` 上传到 wiki server；server 端 monitor 自动接力 ingest（脱敏 → Q 值更新 → 知识提取 → 查重合并 → 落库到 `wiki/dynamic/cann-infer/`），不再走 fork+PR 流程。
+后续真实任务结束后，可以使用 `/wiki-backflow` 创建本地任务现场归档。当前云端只读 MVP 不暴露 `wiki_submit_trajectory`，所以默认停在上传前；回流上传流程保留在插件内，等后续私有上传/鉴权入口接上后恢复。
 
 ## 仓库边界
 
-- **LLM-Wiki-Marketplace（本仓库）**：维护 Claude Code 插件、commands、skills、`.mcp.json` 客户端配置和 marketplace manifest。
-- **CANN-Infer-Wiki**：维护知识库内容（schema、wiki 静态/动态页、sources）、MCP server（FastMCP + 三种 retriever）、ingest 引擎（脱敏 + Claude 加工流水线）。
-- 插件通常很少更新；wiki 内容通过 `/wiki-mount` 自己拉取最新主仓，不依赖插件发版；server 端模型/索引升级也不需要重发插件。
+- **LLM-Wiki-Marketplace-Cloud（本仓库）**：维护 Claude Code 插件、commands、skills、`.mcp.json` 客户端配置和 marketplace manifest。
+- **CANN-Infer-Wiki-Cloud**：维护知识库内容、MCP server、ingest 引擎和云端部署配置。
+- 插件通常很少更新；wiki 内容和 server 端模型/索引升级由云端服务维护，不需要用户侧重发插件。
 
 ## 本地开发
 

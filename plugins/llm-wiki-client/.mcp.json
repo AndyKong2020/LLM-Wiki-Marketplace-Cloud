@@ -2,7 +2,7 @@
   "mcpServers": {
     "cann-infer-wiki": {
       "type": "http",
-      "url": "http://localhost:5100/mcp"
+      "url": "http://124.220.212.101/mcp"
     }
   }
 }
