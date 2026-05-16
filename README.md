@@ -6,6 +6,8 @@
 
 ## 安装
 
+日常使用可以装到 user scope：
+
 添加 marketplace：
 
 ```bash
@@ -20,6 +22,13 @@ claude plugin install llm-wiki-client@llm-wiki-cloud --scope user
 
 安装那一刻插件自带的 `.mcp.json` 被 Claude Code 加载，`cann-infer-wiki-cloud` MCP server 自动注册到客户端配置（HTTP transport，HTTPS URL `https://wiki.andykong.top/mcp`）。
 
+如果只想在某个项目里测试，不改全局插件状态，使用 project scope：
+
+```bash
+claude plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud --scope project
+claude plugin install llm-wiki-client@llm-wiki-cloud --scope project
+```
+
 安装后在需要使用 wiki 的项目中执行：
 
 ```text
@@ -29,6 +38,7 @@ claude plugin install llm-wiki-client@llm-wiki-cloud --scope user
 如果本机以前添加过旧 marketplace（`AndyKong2020/LLM-Wiki-Marketplace`），不需要删除旧 marketplace；Cloud 版使用独立名字和独立命令。若旧插件仍处于 enabled，建议先禁用旧版，避免 agent 同时看到新旧两套 wiki 入口：
 
 ```bash
+claude plugin disable llm-wiki-client@llm-wiki --scope user
 claude plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud --scope user
 claude plugin install llm-wiki-client@llm-wiki-cloud --scope user
 ```
@@ -39,12 +49,22 @@ claude plugin install llm-wiki-client@llm-wiki-cloud --scope user
 /reload-plugins
 ```
 
+更新 Cloud 插件：
+
+```bash
+claude plugin update llm-wiki-client@llm-wiki-cloud --scope user
+```
+
+如果是 project scope 安装，把 `--scope user` 换成 `--scope project`。
+
 `/wiki-cloud-mount` 会：
 
 1. 探活云端 MCP（调用一次 `wiki_search`）确认链路通。
 2. 在项目 `CLAUDE.md` 写入 `<!-- LLM-WIKI:BEGIN -->...<!-- LLM-WIKI:END -->` pin block，告诉 agent 何时调 wiki。
 
 后续真实任务结束后，可以使用 `/wiki-cloud-backflow` 创建本地任务现场归档。当前云端只读 MVP 不暴露 `wiki_submit_trajectory`，所以默认停在上传前；回流上传流程保留在插件内，等后续私有上传/鉴权入口接上后恢复。
+
+当 agent 需要理解 wiki 页面里的图片内容时，插件规则要求先下载 `https://wiki.andykong.top/assets/...` 到本地临时目录 `/tmp/llm-wiki-assets/<page-id>/<filename>`，再用 Claude Code 的 Read 工具读取图片；不要只凭 URL、文件名或 alt 文本推断。
 
 ## 仓库边界
 
@@ -90,3 +110,4 @@ ASSET_URL=https://wiki.andykong.top/assets/...
 
 - 全新临时配置可以 `marketplace add` + `plugin install` 成功；公共仓会通过 HTTPS clone，不需要 SSH。
 - `ccglm` 测试配置从旧 marketplace 切到 Cloud 仓后，不手写 `--mcp-config` 也能通过插件自带 `.mcp.json` 访问 `https://wiki.andykong.top/mcp`。
+- 服务器容器里的真实 Claude 项目级安装已验证：`llm-wiki-client@llm-wiki-cloud` 0.4.3 能调用 MCP、获取 HTTPS asset URL、下载图片并用 Read 读图。

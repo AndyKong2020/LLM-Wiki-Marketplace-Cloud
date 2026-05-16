@@ -13,14 +13,30 @@ claude plugin install llm-wiki-client@llm-wiki-cloud --scope user
 
 安装那一刻插件 `.mcp.json` 会被 Claude Code 加载，`cann-infer-wiki-cloud` MCP server 自动注册到客户端配置；URL 默认 `https://wiki.andykong.top/mcp`。
 
+隔离测试时可以装到当前项目：
+
+```bash
+claude plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud --scope project
+claude plugin install llm-wiki-client@llm-wiki-cloud --scope project
+```
+
 如果之前安装的是旧 marketplace：
 
 ```bash
+claude plugin disable llm-wiki-client@llm-wiki --scope user
 claude plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud --scope user
 claude plugin install llm-wiki-client@llm-wiki-cloud --scope user
 ```
 
 当前会话已经启动时，安装或更新后运行 `/reload-plugins`。
+
+更新已安装的 Cloud 插件：
+
+```bash
+claude plugin update llm-wiki-client@llm-wiki-cloud --scope user
+```
+
+如果是 project scope 安装，把 `--scope user` 换成 `--scope project`。
 
 ## Commands
 
@@ -36,6 +52,14 @@ https://wiki.andykong.top/mcp
 ```
 
 客户端不 clone wiki 仓、不启动本机 server、不需要 GitCode 权限或 SSH key。当前 MVP 云端服务是匿名只读，不暴露 `wiki_submit_trajectory`；backflow 先只做本地归档。
+
+图片资产通过 HTTPS URL 暴露，例如：
+
+```text
+https://wiki.andykong.top/assets/cann-infer/models/qwen3-moe/attention_tp.png
+```
+
+当需要理解图片内容时，agent 应把 asset URL 下载到 `/tmp/llm-wiki-assets/<page-id>/<filename>`，再用 Read 工具读取本地图片。只引用或展示图片时可以直接使用 HTTPS URL。
 
 ## Design
 
