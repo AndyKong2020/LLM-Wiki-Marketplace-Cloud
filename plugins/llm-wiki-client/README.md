@@ -1,6 +1,6 @@
 # LLM-Wiki Client
 
-用于 Claude Code 的 CANN-Infer-Wiki（NPU 大模型推理优化知识库）云端客户端插件。通过插件 root `.mcp.json` 自动注册远程 `cann-infer-wiki-cloud` MCP server；提供 `/wiki-cloud-mount` 写入项目 pin block、`/wiki-cloud-backflow` 创建本地任务回流归档并在配置 token 时上传，以及 `llm-wiki-cloud-query` skill 在运行时通过 MCP 工具检索 wiki。
+用于 Claude Code 的 CANN-Infer-Wiki（NPU 大模型推理优化知识库）云端客户端插件。通过插件 root `.mcp.json` 自动注册远程 `cann-infer-wiki-cloud` MCP server；提供 `/wiki-cloud-mount` 写入项目 pin block、`/wiki-cloud-backflow` 创建本地任务回流归档并在用户确认且配置 token 时上传，以及 `llm-wiki-cloud-query` skill 在运行时通过 MCP 工具检索 wiki。
 
 ## Install
 
@@ -41,7 +41,7 @@ claude plugin update llm-wiki-client@llm-wiki-cloud --scope user
 ## Commands
 
 - `/wiki-cloud-mount`：验证云端 MCP 可达，并在项目 `CLAUDE.md` 写入 LLM-WIKI pin block。
-- `/wiki-cloud-backflow`：创建本地 `.claude/llm-wiki/backflow/<task-slug>/` 轨迹归档；如果设置 `LLM_WIKI_UPLOAD_TOKEN`，会打包为 `tar.gz` 并上传到私有 backflow HTTP 入口。
+- `/wiki-cloud-backflow`：创建本地 `.claude/llm-wiki/backflow/<task-slug>/` 轨迹归档；归档汇报后，如果用户确认继续且设置了 `LLM_WIKI_UPLOAD_TOKEN`，会打包为 `tar.gz` 并上传到私有 backflow HTTP 入口。
 
 `llm-wiki-cloud-query` skill 没有显式 slash 入口，由 `CLAUDE.md` pin block 中列出的触发场景自动激活。
 
@@ -67,7 +67,7 @@ For local or staging tests, optionally override the endpoint:
 export LLM_WIKI_UPLOAD_URL="https://example.test/upload/backflow"
 ```
 
-If `LLM_WIKI_UPLOAD_URL` is unset, `/wiki-cloud-backflow` uploads to `https://wiki.andykong.top/upload/backflow`.
+If `LLM_WIKI_UPLOAD_URL` is unset, `/wiki-cloud-backflow` uses `https://wiki.andykong.top/upload/backflow`. Upload proceeds only after the archive summary is shown and the user confirms.
 
 The upload flow keeps the local archive and creates a tar.gz copy from:
 
@@ -79,7 +79,7 @@ The package is created from the contents of that archive root, must contain exac
 
 | `status` | Meaning |
 |---|---|
-| `ok` | Package accepted; report `id`, `path`, and `entry`. |
+| `ok` | Package accepted; report `id`, `path`, and `entrypoint` when present. |
 | `duplicate` | Server already has this package; report existing `id` and `path`. |
 | `error` | Upload failed; report `error` and `message`, then keep the local archive. |
 

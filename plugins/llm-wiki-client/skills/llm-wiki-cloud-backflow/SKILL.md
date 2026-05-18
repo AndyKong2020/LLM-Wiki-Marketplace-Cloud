@@ -2,7 +2,7 @@
 name: llm-wiki-cloud-backflow
 description: 任务结束后使用。无参数触发，由 agent 判断 task slug 和 workspace，在本地归档真实任务轨迹；如配置 LLM_WIKI_UPLOAD_TOKEN 则通过私有 HTTP 入口上传。
 allowed-tools: Bash Read Write
-version: 0.3.0
+version: 0.4.4
 ---
 
 # LLM-Wiki Backflow
@@ -15,7 +15,7 @@ version: 0.3.0
     +--> 1. 轨迹归档：把本次任务整理成本地目录 .claude/llm-wiki/backflow/<task-slug>/
     |     （顶层 <task-slug>.md + workspace/ 等附件）
     |
-    +--> 2. 轨迹上传：用户确认后，如配置 LLM_WIKI_UPLOAD_TOKEN，
+    +--> 2. 轨迹上传：归档汇报后经用户确认，如配置 LLM_WIKI_UPLOAD_TOKEN，
           把归档目录打包成 tar.gz 并 POST 到 https://wiki.andykong.top/upload/backflow
 ```
 
@@ -188,11 +188,22 @@ token 由 operator 通过仓库外渠道发放。不要打印 token，不要把 
 
 ### 2.2 打包 tar.gz
 
-如果 token 存在，先把 `.claude/llm-wiki/backflow/<task-slug>/` 打成临时 tar.gz。压缩包固定写到 `/tmp/llm-wiki-backflow-upload/<task-slug>.tar.gz`，并且打包内容必须是 archive root 的内容，而不是外层目录本身。
+如果 token 存在，先校验 `task_slug` 和 archive root，再把 `.claude/llm-wiki/backflow/<task-slug>/` 打成临时 tar.gz。压缩包固定写到 `/tmp/llm-wiki-backflow-upload/<task-slug>.tar.gz`，并且打包内容必须是 archive root 的内容，而不是外层目录本身。
 
 ```bash
 task_slug="<task-slug>"
+
+if ! printf '%s\n' "$task_slug" | grep -Eq '^[a-z0-9][a-z0-9-]*$'; then
+  echo "task_slug must match ^[a-z0-9][a-z0-9-]*$; got: ${task_slug}"
+  exit 1
+fi
+
 archive_root=".claude/llm-wiki/backflow/${task_slug}"
+if [ ! -d "$archive_root" ]; then
+  echo "archive root is not a directory: ${archive_root}"
+  exit 1
+fi
+
 pkg_dir="/tmp/llm-wiki-backflow-upload"
 pkg="${pkg_dir}/${task_slug}.tar.gz"
 
@@ -206,7 +217,7 @@ tar -czf "$pkg" -C "$archive_root" .
 - 压缩包大小必须 `<= 50 MiB`，超过时不要调用 curl；保留本地 archive，并向用户汇报需要缩减材料。
 
 ```bash
-top_md_count="$(find "$archive_root" -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')"
+top_md_count="$(find "$archive_root" -maxdepth 1 -type f -iname '*.md' | wc -l | tr -d ' ')"
 if [ "$top_md_count" != "1" ]; then
   echo "upload root must contain exactly one top-level .md file, got ${top_md_count}"
   exit 1
@@ -225,18 +236,44 @@ fi
 ```bash
 upload_url="${LLM_WIKI_UPLOAD_URL:-https://wiki.andykong.top/upload/backflow}"
 
-if ! response="$(
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/llm-wiki-backflow-curl.XXXXXX")"
+curl_config="${tmp_dir}/curl.conf"
+body_file="${tmp_dir}/response.json"
+cleanup_upload_tmp() {
+  rm -rf "$tmp_dir"
+}
+trap cleanup_upload_tmp EXIT HUP INT TERM
+
+printf 'header = "Authorization: %s %s"\n' "Bearer" "$LLM_WIKI_UPLOAD_TOKEN" > "$curl_config"
+chmod 600 "$curl_config"
+
+if ! http_code="$(
   curl -sS -X POST "$upload_url" \
-    -H "Authorization: Bearer ${LLM_WIKI_UPLOAD_TOKEN}" \
-    -F "slug=${task_slug}" \
-    -F "package=@${pkg};type=application/gzip"
+    --config "$curl_config" \
+    --form-string "slug=${task_slug}" \
+    -F "package=@${pkg};type=application/gzip" \
+    --output "$body_file" \
+    --write-out "%{http_code}"
 )"; then
   echo "Upload request failed; local archive is still available at ${archive_root}"
   exit 1
 fi
+
+response="$(cat "$body_file")"
+case "$http_code" in
+  ''|*[!0-9]*)
+    printf 'Upload returned invalid HTTP status: %s\nResponse: %s\n' "$http_code" "$response"
+    exit 1
+    ;;
+esac
+
+if [ "$http_code" -ge 400 ]; then
+  printf 'Upload failed with HTTP %s\nResponse: %s\n' "$http_code" "$response"
+  exit 1
+fi
 ```
 
-不要使用 `set -x` 运行上传命令，避免 shell trace 泄露 Authorization header。不要把 `response` 写入包含 token 的日志；正常 server 响应不会包含 token。
+不要使用 `set -x` 运行上传命令，避免 shell trace 泄露 header。token 只写入 mode `0600` 的临时 curl config，curl argv 只包含 config 文件路径，不包含 token；`trap` 会清理该临时目录。不要把 token 写入 archive、日志或输出；正常 server 响应不会包含 token。
 
 ### 2.4 处理响应
 
@@ -244,8 +281,12 @@ fi
 
 ```bash
 if command -v jq >/dev/null 2>&1; then
-  if ! status="$(printf '%s' "$response" | jq -r '.status // "unknown"')"; then
+  if ! printf '%s' "$response" | jq -e . >/dev/null; then
     printf 'Upload returned non-JSON response: %s\n' "$response"
+    exit 1
+  fi
+  if ! status="$(printf '%s' "$response" | jq -er '.status // empty')"; then
+    printf 'Upload returned JSON without status: %s\n' "$response"
     exit 1
   fi
   case "$status" in
@@ -253,24 +294,30 @@ if command -v jq >/dev/null 2>&1; then
       printf 'Upload ok\nid: %s\npath: %s\nentrypoint: %s\n' \
         "$(printf '%s' "$response" | jq -r '.id // "-"')" \
         "$(printf '%s' "$response" | jq -r '.path // "-"')" \
-        "$(printf '%s' "$response" | jq -r '.entry // .entrypoint // "-"')"
+        "$(printf '%s' "$response" | jq -r '.entrypoint // .entry // "-"')"
+      exit 0
       ;;
     duplicate)
       printf 'Upload duplicate: server already has this package\nid: %s\npath: %s\n' \
         "$(printf '%s' "$response" | jq -r '.id // "-"')" \
         "$(printf '%s' "$response" | jq -r '.path // "-"')"
+      exit 0
       ;;
     error)
       printf 'Upload error\nerror: %s\nmessage: %s\n' \
         "$(printf '%s' "$response" | jq -r '.error // "-"')" \
         "$(printf '%s' "$response" | jq -r '.message // "-"')"
+      exit 1
       ;;
     *)
       printf 'Upload returned unexpected JSON: %s\n' "$response"
+      exit 1
       ;;
   esac
 else
-  printf 'Upload response: %s\n' "$response"
+  printf 'Upload response was not parsed because jq is unavailable: %s\n' "$response"
+  echo "Install jq or inspect the response manually; treating upload as unverified."
+  exit 1
 fi
 ```
 
