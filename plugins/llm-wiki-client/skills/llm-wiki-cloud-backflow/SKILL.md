@@ -2,7 +2,7 @@
 name: llm-wiki-cloud-backflow
 description: 任务结束后使用。无参数触发，由 agent 判断 task slug 和 workspace，在本地归档真实任务轨迹；如配置 LLM_WIKI_UPLOAD_TOKEN 则通过私有 HTTP 入口上传。
 allowed-tools: Bash Read Write
-version: 1.1.0
+version: 1.1.1
 ---
 
 # LLM-Wiki Backflow

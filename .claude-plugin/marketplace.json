@@ -9,7 +9,7 @@
     {
       "name": "llm-wiki-client",
       "description": "在 Claude Code 中挂载并查询云端只读 CANN-Infer-Wiki，保留任务回流归档流程。",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "author": {
         "name": "AndyKong"
       },
