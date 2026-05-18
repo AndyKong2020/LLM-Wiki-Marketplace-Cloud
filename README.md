@@ -33,11 +33,11 @@ Marketplace 名称：`llm-wiki-cloud`
 
 ## 使用方式
 
-1. 在项目中运行 `/llm-wiki-client:llm-wiki-cloud-mount`。它会探活远程 MCP，并向 `CLAUDE.md`
-   写入 LLM-WIKI pin block。
+1. 在需要挂载知识库的项目中运行 `/llm-wiki-client:llm-wiki-cloud-mount`。它会探活远程 MCP，并向 `CLAUDE.md`
+   写入 wiki 使用提示。
 2. 正常使用 claude code。任务进入 LLM/NPU 推理优化相关阶段时，`llm-wiki-cloud-query`
    skill 通过 MCP tools 查询 wiki。
-3. 任务结束后运行 `/llm-wiki-client:wiki-cloud-backflow` 创建本地任务归档。若用户确认且配置了
+3. （可选）任务结束后运行 `/llm-wiki-client:wiki-cloud-backflow` 创建本地任务归档。若用户确认且配置了
    `LLM_WIKI_UPLOAD_TOKEN`，插件会通过私有 HTTP backflow 入口上传归档，将任务经验吸收到 wiki 中。
 
 固定入口：
