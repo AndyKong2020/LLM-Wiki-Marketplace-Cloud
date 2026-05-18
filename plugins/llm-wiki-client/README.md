@@ -1,6 +1,6 @@
 # LLM-Wiki Client
 
-用于 Claude Code 的 CANN-Infer-Wiki（NPU 大模型推理优化知识库）云端只读客户端插件。通过插件 root `.mcp.json` 自动注册远程 `cann-infer-wiki-cloud` MCP server；提供 `/wiki-cloud-mount` 写入项目 pin block、`/wiki-cloud-backflow` 保留任务回流归档流程，以及 `llm-wiki-cloud-query` skill 在运行时通过 MCP 工具检索 wiki。
+用于 Claude Code 的 CANN-Infer-Wiki（NPU 大模型推理优化知识库）云端客户端插件。通过插件 root `.mcp.json` 自动注册远程 `cann-infer-wiki-cloud` MCP server；提供 `/wiki-cloud-mount` 写入项目 pin block、`/wiki-cloud-backflow` 创建本地任务回流归档并在配置 token 时上传，以及 `llm-wiki-cloud-query` skill 在运行时通过 MCP 工具检索 wiki。
 
 ## Install
 
@@ -41,9 +41,49 @@ claude plugin update llm-wiki-client@llm-wiki-cloud --scope user
 ## Commands
 
 - `/wiki-cloud-mount`：验证云端 MCP 可达，并在项目 `CLAUDE.md` 写入 LLM-WIKI pin block。
-- `/wiki-cloud-backflow`：创建本地 `.claude/llm-wiki/backflow/<task-slug>/` 轨迹归档；当前云端只读 MVP 不执行上传，上传流程保留到后续私有入口启用。
+- `/wiki-cloud-backflow`：创建本地 `.claude/llm-wiki/backflow/<task-slug>/` 轨迹归档；如果设置 `LLM_WIKI_UPLOAD_TOKEN`，会打包为 `tar.gz` 并上传到私有 backflow HTTP 入口。
 
 `llm-wiki-cloud-query` skill 没有显式 slash 入口，由 `CLAUDE.md` pin block 中列出的触发场景自动激活。
+
+## Private Backflow Upload
+
+Upload is optional and token-gated. The fixed upload endpoint is:
+
+```text
+https://wiki.andykong.top/upload/backflow
+```
+
+Set the upload token with an environment variable:
+
+```bash
+export LLM_WIKI_UPLOAD_TOKEN="llmw_<token-from-operator>"
+```
+
+The operator distributes upload tokens out-of-band. Do not commit tokens, write them into archives, or paste them into logs.
+
+For local or staging tests, optionally override the endpoint:
+
+```bash
+export LLM_WIKI_UPLOAD_URL="https://example.test/upload/backflow"
+```
+
+If `LLM_WIKI_UPLOAD_URL` is unset, `/wiki-cloud-backflow` uploads to `https://wiki.andykong.top/upload/backflow`.
+
+The upload flow keeps the local archive and creates a tar.gz copy from:
+
+```text
+.claude/llm-wiki/backflow/<task-slug>/
+```
+
+The package is created from the contents of that archive root, must contain exactly one top-level `.md` file, and must be no larger than 50 MiB compressed. The server response uses:
+
+| `status` | Meaning |
+|---|---|
+| `ok` | Package accepted; report `id`, `path`, and `entry`. |
+| `duplicate` | Server already has this package; report existing `id` and `path`. |
+| `error` | Upload failed; report `error` and `message`, then keep the local archive. |
+
+Successful and duplicate uploads are queued under server-side `sources/sessions/uploaded/`. Ingest runs asynchronously after upload; `/wiki-cloud-backflow` does not wait for accepted/to_review processing.
 
 ## Fixed MCP Endpoint
 
@@ -51,7 +91,7 @@ claude plugin update llm-wiki-client@llm-wiki-cloud --scope user
 https://wiki.andykong.top/mcp
 ```
 
-客户端不 clone wiki 仓、不启动本机 server、不需要 GitCode 权限或 SSH key。当前 MVP 云端服务是匿名只读，不暴露 `wiki_submit_trajectory`；backflow 先只做本地归档。
+客户端不 clone wiki 仓、不启动本机 server、不需要 GitCode 权限或 SSH key。MCP 读取保持匿名，通过 `wiki_search` / `wiki_get_page` / `wiki_get_index` 访问；backflow 写入不走 MCP，而是通过私有 token HTTP 上传入口。
 
 图片资产通过 HTTPS URL 暴露，例如：
 
@@ -69,7 +109,7 @@ https://wiki.andykong.top/assets/cann-infer/models/qwen3-moe/attention_tp.png
 - `skills/`：`llm-wiki-cloud-mount`、`llm-wiki-cloud-query`、`llm-wiki-cloud-backflow` 三个 skill，承载流程规则
 - `.mcp.json`：插件 root，自动注册云端 `cann-infer-wiki-cloud` MCP server（HTTP transport，HTTPS URL `https://wiki.andykong.top/mcp`）
 
-MCP server 由云端托管，客户端永远通过 MCP 工具（`wiki_search` / `wiki_get_page`）访问 wiki，不绕开走本地文件。回流上传会在后续私有上传/鉴权入口接入后恢复。
+MCP server 由云端托管，客户端永远通过 MCP 工具（`wiki_search` / `wiki_get_page` / `wiki_get_index`）访问 wiki，不绕开走本地文件。回流上传使用独立 HTTPS endpoint 和 `LLM_WIKI_UPLOAD_TOKEN`，不改变云端 MCP 读取行为。
 
 ## Verification
 
@@ -79,7 +119,7 @@ MCP server 由云端托管，客户端永远通过 MCP 工具（`wiki_search` / 
 https://wiki.andykong.top/assets/...
 ```
 
-公开只读 MVP 的工具列表应只包含：
+云端 MCP 读取工具列表应只包含：
 
 ```text
 wiki_search

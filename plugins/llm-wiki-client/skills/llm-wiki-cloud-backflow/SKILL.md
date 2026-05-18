@@ -1,13 +1,13 @@
 ---
 name: llm-wiki-cloud-backflow
-description: 任务结束后使用。无参数触发，由 agent 判断 task slug 和 workspace，在本地归档真实任务轨迹；上传流程保留为后续私有入口启用。
+description: 任务结束后使用。无参数触发，由 agent 判断 task slug 和 workspace，在本地归档真实任务轨迹；如配置 LLM_WIKI_UPLOAD_TOKEN 则通过私有 HTTP 入口上传。
 allowed-tools: Bash Read Write
 version: 0.3.0
 ---
 
 # LLM-Wiki Backflow
 
-本 skill 包含 **轨迹归档** 和后续将恢复的 **轨迹上传** 具体操作。当前云端只读 MVP 不暴露 `wiki_submit_trajectory`，所以默认只执行第 1 步并停在上传前。
+本 skill 包含 **轨迹归档** 和 **轨迹上传** 具体操作。MCP 查询仍是匿名读取；backflow 上传走私有 token-gated HTTP 入口。
 
 ```text
 /wiki-cloud-backflow
@@ -15,8 +15,8 @@ version: 0.3.0
     +--> 1. 轨迹归档：把本次任务整理成本地目录 .claude/llm-wiki/backflow/<task-slug>/
     |     （顶层 <task-slug>.md + workspace/ 等附件）
     |
-    +--> 2. 轨迹上传（暂未启用）：用户确认后，调用 wiki_submit_trajectory MCP 工具，
-          单次把整个目录上传到 CANN-Infer-Wiki 的 sources/sessions/uploaded/<session_id>/
+    +--> 2. 轨迹上传：用户确认后，如配置 LLM_WIKI_UPLOAD_TOKEN，
+          把归档目录打包成 tar.gz 并 POST 到 https://wiki.andykong.top/upload/backflow
 ```
 
 ## 1. 轨迹归档
@@ -38,7 +38,7 @@ version: 0.3.0
 - 如果当前任务已有明确 slug，直接使用。
 - 否则从当前 `progress.md` 标题、当前 git branch、最近用户任务描述、workspace 目录名中推断一个短 slug。
 - slug 必须使用小写 ASCII、数字和短横线；非字母数字统一转成 `-`。
-- 如果多个 slug 都合理但会影响后续可读性或 `session_id` 唯一性，先问用户确认。
+- 如果多个 slug 都合理但会影响后续可读性或上传目录辨识度，先问用户确认。
 - 如果本地已存在同名 `.claude/llm-wiki/backflow/<task-slug>/`，给 slug 追加短后缀用作区分。
 
 workspace 判断：
@@ -77,7 +77,7 @@ workspace 判断：
 .claude/llm-wiki/backflow/<task-slug>/
 ```
 
-**这个目录的内容就是后续会被 `wiki_submit_trajectory` 一次性上传的"文件清单"**——顶层必有 `<task-slug>.md`，其余文件可以任意命名、任意多级嵌套。Server 端会原样保留树结构落到 `sources/sessions/uploaded/<session_id>/`，再由 ingest 加工。
+**这个目录的内容就是后续 tar.gz 上传包的根目录**——顶层必有且只能有一个 `.md` 文件（通常是 `<task-slug>.md`），其余文件可以任意命名、任意多级嵌套。Server 端会原样保留树结构落到 `sources/sessions/uploaded/<server-id>/`，再由 ingest 异步加工。
 
 
 归档目录至少包含：
@@ -152,95 +152,133 @@ backflow/<task-slug>/
 - 顶层 `<task-slug>.md` 一句话总结 + 文件大小（不复制全文）
 - 整个目录的文件清单（`find . -type f` 输出）+ 文件总数 + 总字节
 - 排除了哪些重要文件以及原因
-- 即将作为 `session_id` 的值
+- 即将作为上传 `slug` 的值
 
-当前云端只读 MVP 下，无论用户是否确认，都不要调用 `wiki_submit_trajectory`；汇报 archive 已准备好，并说明上传会在后续私有入口启用后恢复。
+轨迹上传只在归档汇报完成并得到用户确认后执行。无论上传是否成功，**不要删除**本地 `.claude/llm-wiki/backflow/<task-slug>/` archive。
 
-## 2. 轨迹上传（后续启用）
+## 2. 轨迹上传
 
-当前云端只读 MVP 不执行本节；本节作为后续私有上传/鉴权入口的保留流程。只有当插件配置明确提供可用的 `mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_submit_trajectory` 工具，并且用户确认开启回流时，才进入下面步骤。
-
-轨迹上传只在用户确认后执行。上传走 MCP 工具 `wiki_submit_trajectory`——单次调用把整个 `backflow/<task-slug>/` 目录的文件原样送到 server 端的 `sources/sessions/uploaded/<session_id>/`，server 端 monitor 接力跑 ingest pipeline。
-
-不需要 fork、不需要 PR、不需要 GitCode API；MCP 客户端配置由插件 `.mcp.json` 自带，`/wiki-cloud-mount` 已确认 MCP 可达。
-
-### 2.1 准备 files 数组
-
-遍历 `.claude/llm-wiki/backflow/<task-slug>/` 下所有文件，构造：
-
-```python
-files = [
-    {"name": "<rel_posix_path>", "content": "<base64-of-raw-bytes>"},
-    ...
-]
-```
-
-要点：
-
-- `name` 用相对 `backflow/<task-slug>/` 的 posix 路径（如 `<task-slug>.md`、`workspace/progress.md`、`workspace/logs/profile.txt`）
-- `name` 不能以 `/` 开头、不能含 `..` 段（server 端会拒）
-- `content` 一律是 base64 编码的字节（文本或二进制都用同一编码，server 端字节级还原）
-- **顶层必须恰好有 1 个 `.md` 文件**作为入口（命名约定 `<task-slug>.md`；server 端自动发现，不固定文件名），0 个或 ≥2 个均会被 server 拒绝
-- 跳过 `.git/`、`.DS_Store`、`__pycache__/`、`*.pyc`、`*.tmp` 等噪声
-- 单文件超过 ~5 MB 时停下问用户（base64 后变 ~6.7 MB 流量）
-
-参考实现（Python 片段，agent 视情况实测）：
-
-```python
-import base64
-from pathlib import Path
-
-root = Path(".claude/llm-wiki/backflow/<task-slug>")
-SKIP_DIRS = {".git", "__pycache__"}
-SKIP_NAMES = {".DS_Store"}
-SKIP_EXTS = {".pyc", ".tmp"}
-
-files = []
-for p in sorted(root.rglob("*")):
-    if not p.is_file() or p.is_symlink():
-        continue
-    if any(part in SKIP_DIRS for part in p.parts):
-        continue
-    if p.name in SKIP_NAMES or p.suffix in SKIP_EXTS:
-        continue
-    rel = p.relative_to(root).as_posix()
-    files.append({"name": rel, "content": base64.b64encode(p.read_bytes()).decode()})
-
-top_md = [f for f in files if "/" not in f["name"] and f["name"].lower().endswith(".md")]
-assert len(top_md) == 1, f"upload root must contain exactly 1 top-level .md, got {len(top_md)}: {[f['name'] for f in top_md]}"
-assert "/" not in session_id and "\\" not in session_id, f"session_id must not contain path separators: {session_id!r}"
-```
-
-### 2.2 调用 wiki_submit_trajectory
+上传入口固定为：
 
 ```text
-mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_submit_trajectory(
-    session_id="<task-slug>",
-    files=[ ... ]
-)
+https://wiki.andykong.top/upload/backflow
 ```
 
-`session_id` 直接用 task-slug。Server 端用 `Path(session_id).name` 取 basename 兜底，对空串 / `.` / `..` / 以 `.` 开头的值会显式 reject，但**含 `/` 或 `\` 的值不会报错而是被静默截短**（如 `e2e/case-e` 落到 `uploaded/case-e/`），客户端务必在本地先 assert session_id 无路径分隔符（见 2.1 末尾）。Server 端写入走 `<uploaded>/.staging/<id>/` → 原子 `rename` 到 `<uploaded>/<id>/`，monitor 永远不会看到半成品。
+测试时可用 `LLM_WIKI_UPLOAD_URL` 覆盖；未设置时使用上面的默认 endpoint。
 
-成功返回：
+### 2.1 检查 Token
 
-```json
-{
-    "status": "ok",
-    "path": "/.../sources/sessions/uploaded/<task-slug>",
-    "file_count": N,
-    "total_bytes": M
-}
+如果环境变量 `LLM_WIKI_UPLOAD_TOKEN` 不存在或为空，不执行上传；只汇报本地 archive 路径，并提示用户：
+
+```bash
+if [ -z "${LLM_WIKI_UPLOAD_TOKEN:-}" ]; then
+  echo "LLM_WIKI_UPLOAD_TOKEN is not configured; keeping local archive only."
+  echo 'To enable upload, set: export LLM_WIKI_UPLOAD_TOKEN="llmw_<token-from-operator>"'
+  exit 0
+fi
 ```
 
-### 2.3 处理响应
+配置方式：
+
+```bash
+export LLM_WIKI_UPLOAD_TOKEN="llmw_<token-from-operator>"
+```
+
+token 由 operator 通过仓库外渠道发放。不要打印 token，不要把 token 写入 archive、日志、diff 或 README。
+
+### 2.2 打包 tar.gz
+
+如果 token 存在，先把 `.claude/llm-wiki/backflow/<task-slug>/` 打成临时 tar.gz。压缩包固定写到 `/tmp/llm-wiki-backflow-upload/<task-slug>.tar.gz`，并且打包内容必须是 archive root 的内容，而不是外层目录本身。
+
+```bash
+task_slug="<task-slug>"
+archive_root=".claude/llm-wiki/backflow/${task_slug}"
+pkg_dir="/tmp/llm-wiki-backflow-upload"
+pkg="${pkg_dir}/${task_slug}.tar.gz"
+
+mkdir -p "$pkg_dir"
+tar -czf "$pkg" -C "$archive_root" .
+```
+
+打包前后确认：
+
+- archive root 顶层必须恰好有 1 个 `.md` 文件。0 个或多个都会被 server 拒绝。
+- 压缩包大小必须 `<= 50 MiB`，超过时不要调用 curl；保留本地 archive，并向用户汇报需要缩减材料。
+
+```bash
+top_md_count="$(find "$archive_root" -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')"
+if [ "$top_md_count" != "1" ]; then
+  echo "upload root must contain exactly one top-level .md file, got ${top_md_count}"
+  exit 1
+fi
+
+pkg_bytes="$(wc -c < "$pkg" | tr -d ' ')"
+max_bytes=$((50 * 1024 * 1024))
+if [ "$pkg_bytes" -gt "$max_bytes" ]; then
+  echo "package too large: ${pkg_bytes} bytes > ${max_bytes} bytes"
+  exit 1
+fi
+```
+
+### 2.3 上传
+
+```bash
+upload_url="${LLM_WIKI_UPLOAD_URL:-https://wiki.andykong.top/upload/backflow}"
+
+if ! response="$(
+  curl -sS -X POST "$upload_url" \
+    -H "Authorization: Bearer ${LLM_WIKI_UPLOAD_TOKEN}" \
+    -F "slug=${task_slug}" \
+    -F "package=@${pkg};type=application/gzip"
+)"; then
+  echo "Upload request failed; local archive is still available at ${archive_root}"
+  exit 1
+fi
+```
+
+不要使用 `set -x` 运行上传命令，避免 shell trace 泄露 Authorization header。不要把 `response` 写入包含 token 的日志；正常 server 响应不会包含 token。
+
+### 2.4 处理响应
+
+如果本机有 `jq`，用 JSON 字段汇报：
+
+```bash
+if command -v jq >/dev/null 2>&1; then
+  if ! status="$(printf '%s' "$response" | jq -r '.status // "unknown"')"; then
+    printf 'Upload returned non-JSON response: %s\n' "$response"
+    exit 1
+  fi
+  case "$status" in
+    ok)
+      printf 'Upload ok\nid: %s\npath: %s\nentrypoint: %s\n' \
+        "$(printf '%s' "$response" | jq -r '.id // "-"')" \
+        "$(printf '%s' "$response" | jq -r '.path // "-"')" \
+        "$(printf '%s' "$response" | jq -r '.entry // .entrypoint // "-"')"
+      ;;
+    duplicate)
+      printf 'Upload duplicate: server already has this package\nid: %s\npath: %s\n' \
+        "$(printf '%s' "$response" | jq -r '.id // "-"')" \
+        "$(printf '%s' "$response" | jq -r '.path // "-"')"
+      ;;
+    error)
+      printf 'Upload error\nerror: %s\nmessage: %s\n' \
+        "$(printf '%s' "$response" | jq -r '.error // "-"')" \
+        "$(printf '%s' "$response" | jq -r '.message // "-"')"
+      ;;
+    *)
+      printf 'Upload returned unexpected JSON: %s\n' "$response"
+      ;;
+  esac
+else
+  printf 'Upload response: %s\n' "$response"
+fi
+```
 
 | 返回 | 处理 |
 |---|---|
-| `status: ok` | 上传成功。向用户汇报 server 端落盘路径、文件数、字节数；提示 "server 端 monitor 会自动接力 ingest，不需要等待"。**不删除**本地 `.claude/llm-wiki/backflow/<task-slug>/`（用户可能要二次检查） |
-| `status: error, message: "session already exists: ..."` | 该 `session_id` 已上传过。问用户：① 用 `-r2`/`-r3` 后缀重起一次 backflow ② 或就此停止 |
-| `status: error, message: "upload root must contain exactly one top-level .md file, got ..."` | 顶层 `.md` 文件不是恰好 1 个（0 个或 ≥2 个）。回到 1.4 调整后重试 |
-| `status: error, message: "files[i].content invalid base64 ..."` 或 `unsafe path component ...` | 2.1 编码或路径构造出问题，复查 `name` / `content` 字段 |
-| MCP 不可达 / 工具不可见 | 告诉用户先跑 `/wiki-cloud-mount` 确认 server 就绪后再 `/wiki-cloud-backflow`；本地 archive 已经在 `.claude/llm-wiki/backflow/<task-slug>/`，下次直接复用 |
+| `status: ok` | 汇报 server id、path、entrypoint；说明 server 已把包发布到 `uploaded/` 队列，ingest 异步接力，不需要等待。**不删除**本地 archive。 |
+| `status: duplicate` | 汇报已存在的 server id/path，并说明 server already has this package；不重试，**不删除**本地 archive。 |
+| `status: error` | 原样汇报 `error` 和 `message`；保留本地 archive，按 message 修正后再由用户决定是否重试。 |
+| 非 JSON 或无法解析 | 打印简短 raw response（不得包含 token），说明本地 archive 仍保留。 |
 
-不要伪造成功响应；不要对 `status: error` 的响应抑制错误信息后伪装成功。Server 端 monitor 接力之后用户可以通过 `tail -f <cache>/mcp.log` 观察 ingest 进度（可选）。
+不要伪造成功响应；不要对 `status: error` 的响应抑制错误信息后伪装成功。Server 只负责把完整包发布到 `sources/sessions/uploaded/`；后续 monitor / ingest 是异步流程。
