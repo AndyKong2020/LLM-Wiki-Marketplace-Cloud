@@ -2,7 +2,7 @@
 name: llm-wiki-cloud-query
 description: 查询和运行时消费已挂载的 CANN-Infer-Wiki（通过 MCP）。进入新的 LLM/NPU 推理优化阶段、做方案分析、策略选择、debug 调试、性能/精度回归分析；涉及具体 model / kernel / parallelism / module / framework / technique / quantization / platform 知识、或动态层任务回流型经验时使用。
 allowed-tools: Bash Read Edit Write mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_search mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_get_page
-version: 1.1.4
+version: 1.1.5
 ---
 
 # LLM-Wiki Query
@@ -20,6 +20,7 @@ version: 1.1.4
 - 任务初期判断"是否有 wiki 经验可复用"
 - subagent 接到任务后，先判断要不要查 wiki
 
+涉及 subagent 时，必须视情况将 llm-wiki-query skill 的使用说明注入到拉起 subagent 的 prompt 中。
 每次使用都必须对每个查询到的页面写记录，并把摘要同步到 `progress.md`（见第 4 节）。
 
 ## 2. 重要原则
@@ -31,6 +32,8 @@ version: 1.1.4
 subagent 使用本 skill 时与主 agent 共用同一份 `wiki_usage.md`，位于当前任务的 `progress.md` 同级目录。
 
 如果需要理解 wiki 图片内容，必须先把 `wiki_get_page` 返回的 `https://wiki.andykong.top/assets/...` 图片 URL 下载到本地临时文件（建议路径 `/tmp/llm-wiki-assets/<page-id>/<filename>`），再用 Read 工具读取该图片；不要仅凭 URL、文件名、alt 文本或页面上下文推断图片内容。
+
+** wiki 页面不是 ground truth **：wiki 页面可能不是绝对正确，你应当把 wiki 当做一位经验丰富的老同事，而不是字典。遇到冲突时，应当以实际发生的事实优先。
 
 ## 3. 执行查询（4 步）
 

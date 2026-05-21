@@ -2,7 +2,7 @@
 name: llm-wiki-cloud-mount
 description: 为当前项目挂载云端 CANN-Infer-Wiki（NPU 大模型推理优化知识库）。验证插件自带的远程 MCP 可用，并在项目 CLAUDE.md 写入 LLM-WIKI pin block。
 allowed-tools: Bash Read Edit Write mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_search
-version: 1.1.4
+version: 1.1.5
 ---
 
 # LLM-Wiki Mount
@@ -43,7 +43,7 @@ mode:       cloud-only read
 当前本地插件版本固定取本 skill frontmatter 的 `version`：
 
 ```text
-local_version=1.1.4
+local_version=1.1.5
 ```
 
 用 Bash 拉取远端静态 version manifest 并比较语义版本：
@@ -55,7 +55,7 @@ import re
 import sys
 import urllib.request
 
-LOCAL_VERSION = "1.1.4"
+LOCAL_VERSION = "1.1.5"
 REMOTE_URL = "https://wiki.andykong.top/plugin/llm-wiki-client/version.json"
 
 def parse(v):
