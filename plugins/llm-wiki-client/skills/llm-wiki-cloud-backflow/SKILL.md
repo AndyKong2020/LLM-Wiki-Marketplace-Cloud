@@ -2,7 +2,7 @@
 name: llm-wiki-cloud-backflow
 description: 任务结束后使用。无参数触发，由 agent 判断 task slug 和 workspace，在本地归档真实任务轨迹；如配置 LLM_WIKI_UPLOAD_TOKEN 则通过私有 HTTP 入口上传。
 allowed-tools: Bash Read Write
-version: 1.1.5
+version: 1.1.6
 ---
 
 # LLM-Wiki Backflow
@@ -65,32 +65,17 @@ workspace 判断：
 - 大体积二进制文件
 - credentials、tokens、keys、`.env*`
 - `.git/`、`.idea/`、`.vscode/`、`.claude/llm-wiki/backflow/`（避免递归归档）
-- `.agents-log/meta/`、merged detail、telemetry、完整 transcript
+- 若有 `.agents-log`，默认不上传 `meta/` 目录
 
 如果被排除的材料有证据价值，在 `<task-slug>.md` 的 `Notes` 中写清原路径、原因、摘要和可访问位置；不要把大文件硬塞进上传。
 
-### 1.3 纳入 agents-log summary（可选）
+### 1.3 纳入 agents-log summary（如有）
 
-如果 workspace 下存在 `.agents-log/summary/`，需要尝试识别并归档与当前任务相关的 agent 交互 summary。
-
-只读取 summary 目录内容：
-
-- 扫描 `<workspace>/.agents-log/summary/*/summary.md`
-- 必要时读取对应目录下 `agents/*/summary.md` 的标题、开头和任务片段
-- 不读取 `.agents-log/meta/`
-- 不上传 `.agents-log/meta/`、merged detail、telemetry 或完整 transcript
-
-相关性由 agent 根据当前任务上下文判断，而不是靠 session id 或 meta 索引判断。可用信号包括：
-
-- 当前 `task-slug`、display title、workspace 名
-- `progress.md` / `wiki_usage.md` 的任务摘要
-- 最近用户任务描述、模型名、优化阶段、错误模式、关键文件路径
-- summary 正文中是否描述了同一项任务、同一组输入/输出或同一轮分析目标
+如果 当前任务记录了 `.agents-log/summary/`，需要尝试识别并归档与当前任务相关的 agent log summary。
 
 处理规则：
 
-- 找到一个或多个相关 summary 目录：全部复制到 archive 的 `workspace/agents-log/summary/` 下，保留原 timestamp 目录名和内部结构。
-- 找不到相关 summary：跳过，不阻断 backflow，不要求用户提供 session id 或其它参数。
+- 找到一个或多个相关 session 记录：全部复制到 archive 的 `workspace/agents-log/summary/` 下，保留原 timestamp 目录名和内部结构。
 - 如果 summary 目录中包含 `.DS_Store`、AppleDouble `._*`、缓存或临时文件，复制时排除。
 
 推荐落盘形态：
@@ -109,16 +94,6 @@ workspace 判断：
                         └── usage.json
 ```
 
-复制时可以用 `rsync` 或等价方式，但必须只复制被判定相关的 `summary/<timestamp>/` 目录：
-
-```bash
-mkdir -p "${archive_root}/workspace/agents-log/summary"
-rsync -a \
-  --exclude '.DS_Store' \
-  --exclude '._*' \
-  "${workspace}/.agents-log/summary/<timestamp>/" \
-  "${archive_root}/workspace/agents-log/summary/<timestamp>/"
-```
 
 ### 1.4 创建本地归档
 
