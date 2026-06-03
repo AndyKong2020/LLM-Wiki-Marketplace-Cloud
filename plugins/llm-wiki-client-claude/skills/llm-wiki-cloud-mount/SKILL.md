@@ -94,12 +94,19 @@ PY
 当 `version_check=update_required` 时，必须明确提示用户先更新：
 
 ```text
-当前 llm-wiki-client 版本落后，必须先更新插件后再挂载。
+当前 llm-wiki-client 版本落后，必须先按当前平台更新后再挂载。
 plugin_version_current=<current>
 plugin_version_latest=<latest>
 
-请在 Claude Code 中运行：
+请在 Claude Code 中先更新 marketplace，再更新插件：
+/plugin marketplace update llm-wiki-cloud
 /plugin update llm-wiki-client@llm-wiki-cloud
+/reload-plugins
+
+如果 plugin_version_current 低于 1.2.0，不要只运行上面的 update。请先在 Claude Code 输入 `/plugins`，在界面中卸载旧的 llm-wiki-client；然后运行：
+/plugin marketplace remove llm-wiki-cloud
+/plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud
+/plugin install llm-wiki-client@llm-wiki-cloud
 /reload-plugins
 
 然后重新运行挂载入口。

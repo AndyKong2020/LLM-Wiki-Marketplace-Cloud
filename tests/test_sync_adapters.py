@@ -297,6 +297,29 @@ class SyncAdaptersTests(unittest.TestCase):
         self.assertNotIn("mcp__plugin_llm-wiki-client", codex_mount)
         self.assertNotIn("mcp__plugin_llm-wiki-client", opencode_mount)
 
+    def test_mount_update_guidance_is_platform_specific(self):
+        temp_root = self.run_sync()
+        claude_mount = (temp_root / "plugins/llm-wiki-client-claude/skills/llm-wiki-cloud-mount/SKILL.md").read_text(encoding="utf-8")
+        codex_mount = (temp_root / "plugins/llm-wiki-client-codex/skills/llm-wiki-cloud-mount/SKILL.md").read_text(encoding="utf-8")
+        opencode_mount = (temp_root / "plugins/llm-wiki-client-opencode/skills/llm-wiki-cloud-mount/SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIn("/plugin marketplace update llm-wiki-cloud", claude_mount)
+        self.assertIn("/plugin update llm-wiki-client@llm-wiki-cloud", claude_mount)
+        self.assertIn("plugin_version_current 低于 1.2.0", claude_mount)
+        self.assertIn("`/plugins`", claude_mount)
+        self.assertIn("/plugin marketplace remove llm-wiki-cloud", claude_mount)
+        self.assertIn("/plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud", claude_mount)
+
+        self.assertIn("codex plugin marketplace upgrade llm-wiki-cloud", codex_mount)
+        self.assertIn("codex plugin remove llm-wiki-client@llm-wiki-cloud", codex_mount)
+        self.assertIn("codex plugin add llm-wiki-client@llm-wiki-cloud", codex_mount)
+
+        self.assertIn("plugins/llm-wiki-client-opencode/bootstrap.sh | bash", opencode_mount)
+
+        for text in [codex_mount, opencode_mount]:
+            self.assertNotIn("低于 1.2.0", text)
+            self.assertNotIn("`/plugins`", text)
+
     def test_sync_embeds_pre_rendered_pin_block_in_mount_skills(self):
         temp_root = self.run_sync()
         generated = {

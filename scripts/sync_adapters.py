@@ -79,8 +79,15 @@ def platform_values(base: dict[str, str], platform: str) -> dict[str, str]:
                 "mcp_mutation_guard": "本 skill 不 clone wiki 仓、不启动本机 server、不写 `.mcp.json`、不调用 `claude mcp add`。",
                 "update_required_instructions": "\n".join(
                     [
-                        "请在 Claude Code 中运行：",
+                        "请在 Claude Code 中先更新 marketplace，再更新插件：",
+                        f"/plugin marketplace update {base['marketplace_name']}",
                         f"/plugin update {base['plugin_name']}@{base['marketplace_name']}",
+                        "/reload-plugins",
+                        "",
+                        "如果 plugin_version_current 低于 1.2.0，不要只运行上面的 update。请先在 Claude Code 输入 `/plugins`，在界面中卸载旧的 llm-wiki-client；然后运行：",
+                        f"/plugin marketplace remove {base['marketplace_name']}",
+                        f"/plugin marketplace add {base['repository']}",
+                        f"/plugin install {base['plugin_name']}@{base['marketplace_name']}",
                         "/reload-plugins",
                         "",
                         "然后重新运行挂载入口。",
@@ -93,7 +100,7 @@ def platform_values(base: dict[str, str], platform: str) -> dict[str, str]:
                 "query_tool_unavailable_action": "提示用户运行 `llm-wiki-cloud-mount` 或 `/reload-plugins`",
             }
         )
-    elif platform in {"codex", "opencode"}:
+    elif platform == "codex":
         values.update(
             {
                 "instruction_file": "AGENTS.md",
@@ -103,7 +110,41 @@ def platform_values(base: dict[str, str], platform: str) -> dict[str, str]:
                 "workspace_root_phrase": "当前项目根目录",
                 "mcp_config_summary": "MCP 客户端配置由当前平台 adapter 提供：",
                 "mcp_mutation_guard": "本 skill 不 clone wiki 仓、不启动本机 server、不修改平台 MCP 配置、不调用本地 MCP 注册命令。",
-                "update_required_instructions": "请按照 README 中当前平台 adapter 的说明更新并重新加载插件。\n\n然后重新运行挂载入口。",
+                "update_required_instructions": "\n".join(
+                    [
+                        "请在终端中先更新 marketplace，再重新安装插件：",
+                        f"codex plugin marketplace upgrade {base['marketplace_name']}",
+                        f"codex plugin remove {base['plugin_name']}@{base['marketplace_name']}",
+                        f"codex plugin add {base['plugin_name']}@{base['marketplace_name']}",
+                        "",
+                        "然后重新打开 Codex 会话并运行挂载入口。",
+                    ]
+                ),
+                "tool_not_found_action": "提示用户重新加载当前平台 adapter 后重新运行挂载入口",
+                "tool_not_found_final_hint": "重新加载当前平台 adapter 后重新运行挂载入口",
+                "update_required_label": "更新说明",
+                "instruction_report_field": "instruction_file",
+                "query_tool_unavailable_action": "提示用户运行挂载入口或重新加载当前平台 adapter",
+            }
+        )
+    elif platform == "opencode":
+        values.update(
+            {
+                "instruction_file": "AGENTS.md",
+                "wiki_search_tool": "cann-infer-wiki-cloud wiki_search",
+                "wiki_get_page_tool": "cann-infer-wiki-cloud wiki_get_page",
+                "project_context_label": "当前项目",
+                "workspace_root_phrase": "当前项目根目录",
+                "mcp_config_summary": "MCP 客户端配置由当前平台 adapter 提供：",
+                "mcp_mutation_guard": "本 skill 不 clone wiki 仓、不启动本机 server、不修改平台 MCP 配置、不调用本地 MCP 注册命令。",
+                "update_required_instructions": "\n".join(
+                    [
+                        "请在终端中重新运行 OpenCode bootstrap：",
+                        f"curl -fsSL https://raw.githubusercontent.com/{base['repository']}/{base['ref']}/plugins/{base['plugin_name']}-opencode/bootstrap.sh | bash",
+                        "",
+                        "然后重新打开 OpenCode 会话并运行挂载入口。",
+                    ]
+                ),
                 "tool_not_found_action": "提示用户重新加载当前平台 adapter 后重新运行挂载入口",
                 "tool_not_found_final_hint": "重新加载当前平台 adapter 后重新运行挂载入口",
                 "update_required_label": "更新说明",

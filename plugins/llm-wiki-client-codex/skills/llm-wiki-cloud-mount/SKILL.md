@@ -94,13 +94,16 @@ PY
 当 `version_check=update_required` 时，必须明确提示用户先更新：
 
 ```text
-当前 llm-wiki-client 版本落后，必须先更新插件后再挂载。
+当前 llm-wiki-client 版本落后，必须先按当前平台更新后再挂载。
 plugin_version_current=<current>
 plugin_version_latest=<latest>
 
-请按照 README 中当前平台 adapter 的说明更新并重新加载插件。
+请在终端中先更新 marketplace，再重新安装插件：
+codex plugin marketplace upgrade llm-wiki-cloud
+codex plugin remove llm-wiki-client@llm-wiki-cloud
+codex plugin add llm-wiki-client@llm-wiki-cloud
 
-然后重新运行挂载入口。
+然后重新打开 Codex 会话并运行挂载入口。
 ```
 
 ## 3. STEP 2：远程 MCP Probe
