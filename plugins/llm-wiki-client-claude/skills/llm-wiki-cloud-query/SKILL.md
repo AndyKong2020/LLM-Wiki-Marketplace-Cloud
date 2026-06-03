@@ -2,7 +2,7 @@
 name: llm-wiki-cloud-query
 description: 查询和运行时消费已挂载的 CANN-Infer-Wiki（通过 MCP）。进入新的 LLM/NPU 推理优化阶段、做方案分析、策略选择、debug 调试、性能/精度回归分析；涉及具体 model / kernel / parallelism / module / framework / technique / quantization / platform 知识、或动态层任务回流型经验时使用。
 allowed-tools: Bash Read Edit Write mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_search mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_get_page
-version: 1.1.8
+version: 1.2.0
 ---
 
 # LLM-Wiki Query
@@ -175,7 +175,7 @@ subagent 使用本 skill 时必须遵守：
 
 | 现象 | 处理 |
 |---|---|
-| `wiki_search` 抛错 `MCP server unreachable` 或工具不可见 | 不要伪造结果。提示用户运行挂载入口或重新加载当前平台 adapter，停止本次查询 |
+| `wiki_search` 抛错 `MCP server unreachable` 或工具不可见 | 不要伪造结果。提示用户运行 `llm-wiki-cloud-mount` 或 `/reload-plugins`，停止本次查询 |
 | `wiki_search` 返回 `{warning: "..."}`（retriever 失败） | 把 warning 原文写到 `progress.md` "Wiki 查询记录"段；本次查询作废，不继续 get_page |
 | `wiki_get_page` 返回 `errors=[{id, reason}]` | 跳过这些 ID（多半是已归档或拼写错）；不重试 |
 | top-1 候选 summary 完全不沾边 | 重写 query 再试一次；最多重试 1 次仍不沾边 → progress.md 记"wiki 暂无相关知识"，停止 |

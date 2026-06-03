@@ -98,9 +98,7 @@ PY
 plugin_version_current=<current>
 plugin_version_latest=<latest>
 
-请按照 README 中当前平台 adapter 的说明更新并重新加载插件。
-
-然后重新运行挂载入口。
+{{update_required_instructions}}
 ```
 
 ## 3. STEP 2：远程 MCP Probe
@@ -117,7 +115,7 @@ plugin_version_latest=<latest>
 |---|---|
 | 返回 `results` 或空结果且无 warning | probe 通过，进入 STEP 2 |
 | 返回 `{warning: "..."}` | 输出 warning 原文，停止 mount |
-| 工具不存在 | 提示用户重新加载当前平台 adapter 后重新运行挂载入口 |
+| 工具不存在 | {{tool_not_found_action}} |
 | MCP 不可达 | 提示当前云端 MCP 不可达，停止 mount |
 
 不要伪造 probe 成功；不要尝试本地启动 server 兜底。
@@ -150,9 +148,9 @@ mcp_mode=cloud-only-read
 mcp_url={{mcp_url}}
 mcp_probe=rpc_ok | tool_not_found_reload_required | failed | skipped_update_required
 pin_status=created | updated | already_current | broken
-instruction_file=<absolute path>
+{{instruction_report_field}}=<absolute path>
 ```
 
-如果 `version_check=update_required`，`mcp_probe=skipped_update_required`，`pin_status` 不输出或输出 `skipped_update_required`，并且必须打印上面的更新说明。
+如果 `version_check=update_required`，`mcp_probe=skipped_update_required`，`pin_status` 不输出或输出 `skipped_update_required`，并且必须打印上面的{{update_required_label}}。
 
-如果 `mcp_probe=tool_not_found_reload_required`，最后提示用户：重新加载当前平台 adapter 后重新运行挂载入口。
+如果 `mcp_probe=tool_not_found_reload_required`，最后提示用户：{{tool_not_found_final_hint}}。

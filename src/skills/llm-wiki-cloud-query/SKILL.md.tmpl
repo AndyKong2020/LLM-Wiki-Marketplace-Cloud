@@ -175,7 +175,7 @@ subagent 使用本 skill 时必须遵守：
 
 | 现象 | 处理 |
 |---|---|
-| `wiki_search` 抛错 `MCP server unreachable` 或工具不可见 | 不要伪造结果。提示用户运行挂载入口或重新加载当前平台 adapter，停止本次查询 |
+| `wiki_search` 抛错 `MCP server unreachable` 或工具不可见 | 不要伪造结果。{{query_tool_unavailable_action}}，停止本次查询 |
 | `wiki_search` 返回 `{warning: "..."}`（retriever 失败） | 把 warning 原文写到 `progress.md` "Wiki 查询记录"段；本次查询作废，不继续 get_page |
 | `wiki_get_page` 返回 `errors=[{id, reason}]` | 跳过这些 ID（多半是已归档或拼写错）；不重试 |
 | top-1 候选 summary 完全不沾边 | 重写 query 再试一次；最多重试 1 次仍不沾边 → progress.md 记"wiki 暂无相关知识"，停止 |

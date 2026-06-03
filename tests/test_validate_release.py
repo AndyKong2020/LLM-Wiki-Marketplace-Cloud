@@ -228,36 +228,37 @@ class DocumentationTests(unittest.TestCase):
             "Claude Code",
             "Codex",
             "OpenCode",
-            "multiclient-test",
-            "llm-wiki-cloud-test",
-            "/plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Multiclient-Test",
-            "/plugin install llm-wiki-client@llm-wiki-cloud-test",
-            "/plugin update llm-wiki-client@llm-wiki-cloud-test",
-            "/plugin uninstall llm-wiki-client@llm-wiki-cloud-test",
-            "/plugin marketplace remove llm-wiki-cloud-test",
-            "claude plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Multiclient-Test",
-            "claude plugin install llm-wiki-client@llm-wiki-cloud-test",
-            "claude plugin update llm-wiki-client@llm-wiki-cloud-test",
-            "claude plugin uninstall llm-wiki-client@llm-wiki-cloud-test",
-            "claude plugin marketplace remove llm-wiki-cloud-test",
-            "codex plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Multiclient-Test",
-            "codex plugin marketplace upgrade llm-wiki-cloud-test",
-            "codex plugin add llm-wiki-client@llm-wiki-cloud-test",
-            "codex plugin remove llm-wiki-client@llm-wiki-cloud-test",
-            "codex plugin marketplace remove llm-wiki-cloud-test",
+            "llm-wiki-cloud",
+            "/plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace",
+            "/plugin install llm-wiki-client@llm-wiki-cloud",
+            "/plugin update llm-wiki-client@llm-wiki-cloud",
+            "/plugin uninstall llm-wiki-client@llm-wiki-cloud",
+            "/plugin marketplace remove llm-wiki-cloud",
+            "claude plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace",
+            "claude plugin install llm-wiki-client@llm-wiki-cloud",
+            "claude plugin update llm-wiki-client@llm-wiki-cloud",
+            "claude plugin uninstall llm-wiki-client@llm-wiki-cloud",
+            "claude plugin marketplace remove llm-wiki-cloud",
+            "codex plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace",
+            "codex plugin marketplace upgrade llm-wiki-cloud",
+            "codex plugin add llm-wiki-client@llm-wiki-cloud",
+            "codex plugin remove llm-wiki-client@llm-wiki-cloud",
+            "codex plugin marketplace remove llm-wiki-cloud",
             "bootstrap.sh | bash",
             "uninstall.sh | bash",
-            "模拟用户使用流程",
-            "CLAUDE_CONFIG_DIR",
-            "CODEX_HOME",
-            "OPENCODE_CONFIG_DIR",
+            "维护发布",
             "llm-wiki-cloud-mount",
             "llm-wiki-cloud-backflow",
         ]:
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
-        self.assertNotIn("llm-wiki-client@llm-wiki-cloud\n", text)
-        self.assertNotIn("LLM-Wiki-Marketplace-Cloud", text)
+        self.assertNotIn("llm-wiki-cloud-test", text)
+        self.assertNotIn("LLM-Wiki-Marketplace-Multiclient-Test", text)
+        self.assertNotIn("multiclient-test", text)
+        self.assertNotIn("模拟用户使用流程", text)
+        self.assertNotIn("CLAUDE_CONFIG_DIR", text)
+        self.assertNotIn("CODEX_HOME", text)
+        self.assertNotIn("OPENCODE_CONFIG_DIR", text)
         self.assertNotIn("python3 scripts/test_isolated_clients.py", text)
         self.assertNotIn("codex plugin marketplace upgrade\n", text)
         self.assertNotIn("/llm-wiki-client:", text)

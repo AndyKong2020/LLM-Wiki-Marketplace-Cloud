@@ -1,5 +1,5 @@
 {
-  "name": "llm-wiki-cloud-test",
+  "name": "llm-wiki-cloud",
   "interface": {
     "displayName": "LLM Wiki Cloud"
   },

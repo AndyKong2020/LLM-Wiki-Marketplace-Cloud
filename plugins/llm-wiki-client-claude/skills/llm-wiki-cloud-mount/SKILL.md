@@ -2,7 +2,7 @@
 name: llm-wiki-cloud-mount
 description: 为当前项目挂载云端 CANN-Infer-Wiki（NPU 大模型推理优化知识库）。验证插件自带的远程 MCP 可用，并在项目 CLAUDE.md 写入 LLM-WIKI pin block。
 allowed-tools: Bash Read Edit Write mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_search
-version: 1.1.8
+version: 1.2.0
 ---
 
 # LLM-Wiki Mount
@@ -43,7 +43,7 @@ llm-wiki-cloud-mount
 当前本地插件版本固定取本 skill frontmatter 的 `version`：
 
 ```text
-local_version=1.1.8
+local_version=1.2.0
 ```
 
 用 Bash 拉取远端静态 version manifest 并比较语义版本：
@@ -55,7 +55,7 @@ import re
 import sys
 import urllib.request
 
-LOCAL_VERSION = "1.1.8"
+LOCAL_VERSION = "1.2.0"
 REMOTE_URL = "https://wiki.andykong.top/plugin/llm-wiki-client/version.json"
 
 def parse(v):
@@ -98,7 +98,9 @@ PY
 plugin_version_current=<current>
 plugin_version_latest=<latest>
 
-请按照 README 中当前平台 adapter 的说明更新并重新加载插件。
+请在 Claude Code 中运行：
+/plugin update llm-wiki-client@llm-wiki-cloud
+/reload-plugins
 
 然后重新运行挂载入口。
 ```
@@ -117,7 +119,7 @@ mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_search(query="mount prob
 |---|---|
 | 返回 `results` 或空结果且无 warning | probe 通过，进入 STEP 2 |
 | 返回 `{warning: "..."}` | 输出 warning 原文，停止 mount |
-| 工具不存在 | 提示用户重新加载当前平台 adapter 后重新运行挂载入口 |
+| 工具不存在 | 提示用户运行 `/reload-plugins` 后重新运行挂载入口 |
 | MCP 不可达 | 提示当前云端 MCP 不可达，停止 mount |
 
 不要伪造 probe 成功；不要尝试本地启动 server 兜底。
@@ -165,9 +167,9 @@ mcp_mode=cloud-only-read
 mcp_url=https://wiki.andykong.top/mcp
 mcp_probe=rpc_ok | tool_not_found_reload_required | failed | skipped_update_required
 pin_status=created | updated | already_current | broken
-instruction_file=<absolute path>
+claude_md=<absolute path>
 ```
 
-如果 `version_check=update_required`，`mcp_probe=skipped_update_required`，`pin_status` 不输出或输出 `skipped_update_required`，并且必须打印上面的更新说明。
+如果 `version_check=update_required`，`mcp_probe=skipped_update_required`，`pin_status` 不输出或输出 `skipped_update_required`，并且必须打印上面的更新命令。
 
-如果 `mcp_probe=tool_not_found_reload_required`，最后提示用户：重新加载当前平台 adapter 后重新运行挂载入口。
+如果 `mcp_probe=tool_not_found_reload_required`，最后提示用户：在当前会话中运行 `/reload-plugins` 后重新运行挂载入口。

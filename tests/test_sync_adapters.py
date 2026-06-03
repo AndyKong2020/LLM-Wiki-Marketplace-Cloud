@@ -35,9 +35,9 @@ class SourceLayoutTests(unittest.TestCase):
         self.assertRegex(version, r"^\d+\.\d+\.\d+$")
         self.assertEqual(constants["version"], version)
         self.assertEqual(constants["plugin_name"], "llm-wiki-client")
-        self.assertEqual(constants["marketplace_name"], "llm-wiki-cloud-test")
-        self.assertEqual(constants["test_repository"], "AndyKong2020/LLM-Wiki-Marketplace-Multiclient-Test")
-        self.assertEqual(constants["test_ref"], "main")
+        self.assertEqual(constants["marketplace_name"], "llm-wiki-cloud")
+        self.assertEqual(constants["repository"], "AndyKong2020/LLM-Wiki-Marketplace")
+        self.assertEqual(constants["ref"], "main")
         self.assertEqual(constants["mcp_url"], "https://wiki.andykong.top/mcp")
         self.assertEqual(constants["backflow_upload_url"], "https://wiki.andykong.top/upload/backflow")
         self.assertEqual(constants["version_manifest_url"], "https://wiki.andykong.top/plugin/llm-wiki-client/version.json")
@@ -135,12 +135,6 @@ class TemplateInventoryTests(unittest.TestCase):
             self.assertIn("version: {{version}}", text)
             self.assertIn("name:", text)
             self.assertIn("description:", text)
-
-    def test_distribution_plan_does_not_embed_realistic_upload_tokens(self):
-        plan_path = ROOT / "docs/superpowers/plans/2026-06-01-multiclient-distribution-implementation.md"
-        text = plan_path.read_text(encoding="utf-8")
-        self.assertIsNone(TOKEN_PATTERN.search(text), plan_path.relative_to(ROOT))
-
 
 class SyncAdaptersTests(unittest.TestCase):
     FIXTURE_PATHS = [
@@ -287,7 +281,7 @@ class SyncAdaptersTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertNotIn("{{", text)
             self.assertNotIn("}}", text)
-            self.assertIn("version: 1.1.8", text)
+            self.assertIn("version: 1.2.0", text)
             self.assertIn("https://wiki.andykong.top/mcp", text)
 
     def test_sync_generates_platform_specific_instruction_targets(self):

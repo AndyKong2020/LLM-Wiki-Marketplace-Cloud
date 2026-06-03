@@ -1,12 +1,12 @@
 {
-  "version": "1.1.8",
-  "marketplace_name": "llm-wiki-cloud-test",
+  "version": "1.2.0",
+  "marketplace_name": "llm-wiki-cloud",
   "plugin_name": "llm-wiki-client",
   "mcp_server_name": "cann-infer-wiki-cloud",
   "mcp_url": "https://wiki.andykong.top/mcp",
   "backflow_upload_url": "https://wiki.andykong.top/upload/backflow",
   "assets_base_url": "https://wiki.andykong.top/assets/",
   "version_manifest_url": "https://wiki.andykong.top/plugin/llm-wiki-client/version.json",
-  "test_repository": "AndyKong2020/LLM-Wiki-Marketplace-Multiclient-Test",
-  "test_ref": "main"
+  "repository": "AndyKong2020/LLM-Wiki-Marketplace",
+  "ref": "main"
 }

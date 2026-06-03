@@ -77,6 +77,20 @@ def platform_values(base: dict[str, str], platform: str) -> dict[str, str]:
                 "workspace_root_phrase": "当前 Claude Code 项目目录",
                 "mcp_config_summary": "MCP 客户端配置由插件 root 的 `.mcp.json` 自带，安装插件后自动注册：",
                 "mcp_mutation_guard": "本 skill 不 clone wiki 仓、不启动本机 server、不写 `.mcp.json`、不调用 `claude mcp add`。",
+                "update_required_instructions": "\n".join(
+                    [
+                        "请在 Claude Code 中运行：",
+                        f"/plugin update {base['plugin_name']}@{base['marketplace_name']}",
+                        "/reload-plugins",
+                        "",
+                        "然后重新运行挂载入口。",
+                    ]
+                ),
+                "tool_not_found_action": "提示用户运行 `/reload-plugins` 后重新运行挂载入口",
+                "tool_not_found_final_hint": "在当前会话中运行 `/reload-plugins` 后重新运行挂载入口",
+                "update_required_label": "更新命令",
+                "instruction_report_field": "claude_md",
+                "query_tool_unavailable_action": "提示用户运行 `llm-wiki-cloud-mount` 或 `/reload-plugins`",
             }
         )
     elif platform in {"codex", "opencode"}:
@@ -89,6 +103,12 @@ def platform_values(base: dict[str, str], platform: str) -> dict[str, str]:
                 "workspace_root_phrase": "当前项目根目录",
                 "mcp_config_summary": "MCP 客户端配置由当前平台 adapter 提供：",
                 "mcp_mutation_guard": "本 skill 不 clone wiki 仓、不启动本机 server、不修改平台 MCP 配置、不调用本地 MCP 注册命令。",
+                "update_required_instructions": "请按照 README 中当前平台 adapter 的说明更新并重新加载插件。\n\n然后重新运行挂载入口。",
+                "tool_not_found_action": "提示用户重新加载当前平台 adapter 后重新运行挂载入口",
+                "tool_not_found_final_hint": "重新加载当前平台 adapter 后重新运行挂载入口",
+                "update_required_label": "更新说明",
+                "instruction_report_field": "instruction_file",
+                "query_tool_unavailable_action": "提示用户运行挂载入口或重新加载当前平台 adapter",
             }
         )
     else:

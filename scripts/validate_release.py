@@ -20,7 +20,7 @@ TOKEN_RE = re.compile(r"\bllmw_(?!<token-from-operator>)(?!token-from-operator\b
 
 README_MARKETPLACE_ADD_COMMAND = (
     "/plugin marketplace add "
-    "AndyKong2020/LLM-Wiki-Marketplace-Multiclient-Test"
+    "AndyKong2020/LLM-Wiki-Marketplace"
 )
 JSON_FILES = [
     ".claude-plugin/marketplace.json",
