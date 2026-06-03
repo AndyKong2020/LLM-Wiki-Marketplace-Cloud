@@ -17,22 +17,11 @@ Marketplace 名称：`llm-wiki-cloud`
 /plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud
 
 # 安装插件
-/plugin install llm-wiki-client@llm-wiki-cloud
+/plugin 进入插件配置页面，进入 Marketplaces 菜单
+选择 llm-wiki-cloud -> Browse plugins (1)
+安装 llm-wiki-client
 /reload-plugins
 
-# 更新 marketplace
-/plugin marketplace update llm-wiki-cloud
-
-# 更新插件
-/plugin update llm-wiki-client@llm-wiki-cloud
-/reload-plugins
-
-# 卸载插件
-/plugin uninstall llm-wiki-client@llm-wiki-cloud
-/reload-plugins
-
-# 移除 marketplace
-/plugin marketplace remove llm-wiki-cloud
 ```
 
 等价 CLI 命令：
