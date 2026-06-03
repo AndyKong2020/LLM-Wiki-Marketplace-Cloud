@@ -270,6 +270,7 @@ class SyncAdaptersTests(unittest.TestCase):
 
     def test_sync_replaces_all_template_variables(self):
         temp_root = self.run_sync()
+        version = (temp_root / "VERSION").read_text(encoding="utf-8").strip()
         generated = [
             "plugins/llm-wiki-client-claude/skills/llm-wiki-cloud-mount/SKILL.md",
             "plugins/llm-wiki-client-codex/skills/llm-wiki-cloud-mount/SKILL.md",
@@ -281,7 +282,7 @@ class SyncAdaptersTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertNotIn("{{", text)
             self.assertNotIn("}}", text)
-            self.assertIn("version: 1.2.0", text)
+            self.assertIn(f"version: {version}", text)
             self.assertIn("https://wiki.andykong.top/mcp", text)
 
     def test_sync_generates_platform_specific_instruction_targets(self):
