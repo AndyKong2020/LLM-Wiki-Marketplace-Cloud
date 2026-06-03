@@ -14,8 +14,8 @@
         "name": "AndyKong"
       },
       "source": "./plugins/llm-wiki-client-claude",
-      "homepage": "https://github.com/AndyKong2020/LLM-Wiki-Marketplace/tree/main/plugins/llm-wiki-client-claude",
-      "repository": "https://github.com/AndyKong2020/LLM-Wiki-Marketplace",
+      "homepage": "https://github.com/AndyKong2020/LLM-Wiki-Marketplace-Cloud/tree/main/plugins/llm-wiki-client-claude",
+      "repository": "https://github.com/AndyKong2020/LLM-Wiki-Marketplace-Cloud",
       "category": "development",
       "keywords": [
         "llm-wiki",

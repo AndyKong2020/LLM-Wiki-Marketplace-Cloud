@@ -14,7 +14,7 @@ Marketplace 名称：`llm-wiki-cloud`
 
 ```text
 # 添加 marketplace
-/plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace
+/plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud
 
 # 安装插件
 /plugin install llm-wiki-client@llm-wiki-cloud
@@ -38,7 +38,7 @@ Marketplace 名称：`llm-wiki-cloud`
 等价 CLI 命令：
 
 ```bash
-claude plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace
+claude plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud
 claude plugin install llm-wiki-client@llm-wiki-cloud
 claude plugin marketplace update llm-wiki-cloud
 claude plugin update llm-wiki-client@llm-wiki-cloud
@@ -50,7 +50,7 @@ claude plugin marketplace remove llm-wiki-cloud
 
 ```bash
 # 添加 marketplace
-codex plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace
+codex plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud
 
 # 安装插件
 codex plugin add llm-wiki-client@llm-wiki-cloud
@@ -75,10 +75,10 @@ OpenCode 没有独立 marketplace source；安装和更新都重新运行 bootst
 
 ```bash
 # 安装 / 更新
-curl -fsSL https://raw.githubusercontent.com/AndyKong2020/LLM-Wiki-Marketplace/main/plugins/llm-wiki-client-opencode/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/AndyKong2020/LLM-Wiki-Marketplace-Cloud/main/plugins/llm-wiki-client-opencode/bootstrap.sh | bash
 
 # 卸载
-curl -fsSL https://raw.githubusercontent.com/AndyKong2020/LLM-Wiki-Marketplace/main/plugins/llm-wiki-client-opencode/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/AndyKong2020/LLM-Wiki-Marketplace-Cloud/main/plugins/llm-wiki-client-opencode/uninstall.sh | bash
 ```
 
 ## 使用方式

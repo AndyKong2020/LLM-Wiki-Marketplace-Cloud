@@ -36,7 +36,7 @@ class SourceLayoutTests(unittest.TestCase):
         self.assertEqual(constants["version"], version)
         self.assertEqual(constants["plugin_name"], "llm-wiki-client")
         self.assertEqual(constants["marketplace_name"], "llm-wiki-cloud")
-        self.assertEqual(constants["repository"], "AndyKong2020/LLM-Wiki-Marketplace")
+        self.assertEqual(constants["repository"], "AndyKong2020/LLM-Wiki-Marketplace-Cloud")
         self.assertEqual(constants["ref"], "main")
         self.assertEqual(constants["mcp_url"], "https://wiki.andykong.top/mcp")
         self.assertEqual(constants["backflow_upload_url"], "https://wiki.andykong.top/upload/backflow")

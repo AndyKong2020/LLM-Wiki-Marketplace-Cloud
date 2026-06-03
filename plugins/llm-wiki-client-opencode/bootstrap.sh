@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo="https://github.com/AndyKong2020/LLM-Wiki-Marketplace.git"
+repo="https://github.com/AndyKong2020/LLM-Wiki-Marketplace-Cloud.git"
 ref="main"
 workdir="${TMPDIR:-/tmp}/llm-wiki-opencode-bootstrap.$$"
 

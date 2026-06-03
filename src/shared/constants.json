@@ -7,6 +7,6 @@
   "backflow_upload_url": "https://wiki.andykong.top/upload/backflow",
   "assets_base_url": "https://wiki.andykong.top/assets/",
   "version_manifest_url": "https://wiki.andykong.top/plugin/llm-wiki-client/version.json",
-  "repository": "AndyKong2020/LLM-Wiki-Marketplace",
+  "repository": "AndyKong2020/LLM-Wiki-Marketplace-Cloud",
   "ref": "main"
 }
