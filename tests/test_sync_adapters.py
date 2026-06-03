@@ -307,8 +307,9 @@ class SyncAdaptersTests(unittest.TestCase):
         self.assertIn("/plugin update llm-wiki-client@llm-wiki-cloud", claude_mount)
         self.assertIn("plugin_version_current 低于 1.2.0", claude_mount)
         self.assertIn("`/plugins`", claude_mount)
-        self.assertIn("/plugin marketplace remove llm-wiki-cloud", claude_mount)
-        self.assertIn("/plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud", claude_mount)
+        self.assertIn("/plugin install llm-wiki-client@llm-wiki-cloud", claude_mount)
+        self.assertNotIn("/plugin marketplace remove llm-wiki-cloud", claude_mount)
+        self.assertNotIn("/plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud", claude_mount)
 
         self.assertIn("codex plugin marketplace upgrade llm-wiki-cloud", codex_mount)
         self.assertIn("codex plugin remove llm-wiki-client@llm-wiki-cloud", codex_mount)

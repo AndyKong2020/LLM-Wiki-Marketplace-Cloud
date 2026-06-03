@@ -103,9 +103,8 @@ plugin_version_latest=<latest>
 /plugin update llm-wiki-client@llm-wiki-cloud
 /reload-plugins
 
-如果 plugin_version_current 低于 1.2.0，不要只运行上面的 update。请先在 Claude Code 输入 `/plugins`，在界面中卸载旧的 llm-wiki-client；然后运行：
-/plugin marketplace remove llm-wiki-cloud
-/plugin marketplace add AndyKong2020/LLM-Wiki-Marketplace-Cloud
+如果 plugin_version_current 低于 1.2.0，不要只运行上面的 update。请先在 Claude Code 输入 `/plugins`，在界面中卸载旧的 llm-wiki-client；然后更新 marketplace 并重新安装插件：
+/plugin marketplace update llm-wiki-cloud
 /plugin install llm-wiki-client@llm-wiki-cloud
 /reload-plugins
 
