@@ -80,7 +80,7 @@ workspace 判断：
 - 如果 summary 目录中包含 `.DS_Store`、AppleDouble `._*`、缓存或临时文件，复制时排除。
 - 如果没有找到相关 `.agents-log` summary：触发或使用 `session-extractor` skill，以 structured 模式导出当前会话到 archive 的 `workspace/agents-log/`。
 - fallback 成功后，后续仍按 `workspace/agents-log/summary/<timestamp>/` 记录和汇报；只在 `Notes` 中标注它由 `session-extractor` 生成。
-- 不要在 backflow 中复写 `session-extractor` 的定位、解析或渲染逻辑；只按该 skill 的公开契约调用它，并把输出根目录设为 `workspace/agents-log/`。
+- 执行 `session-extractor` 时使用 structured 模式，并把输出根目录设为 `workspace/agents-log/`。
 - 如果 `session-extractor` 失败，不阻塞本地 archive；在顶层 `<task-slug>.md` 的 `Notes` 和最终汇报里写清失败原因。
 
 推荐落盘形态：
