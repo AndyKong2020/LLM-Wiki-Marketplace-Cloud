@@ -1,5 +1,5 @@
 {
-  "version": "1.2.1",
+  "version": "1.2.2",
   "marketplace_name": "llm-wiki-cloud",
   "plugin_name": "llm-wiki-client",
   "mcp_server_name": "cann-infer-wiki-cloud",
