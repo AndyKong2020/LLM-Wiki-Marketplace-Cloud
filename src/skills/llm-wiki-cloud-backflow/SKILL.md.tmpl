@@ -57,6 +57,7 @@ workspace 判断：
 - 任务侧 patch、diff、git status，作为普通 workspace 材料保存
 - 小型 benchmark 摘要、profiling 摘要、结论截图或文本报告
 - 与当前任务相关的 `.agents-log/summary/<timestamp>/` 目录（如果存在）
+- 如果没有相关 `.agents-log` summary，可用 `session-extractor` skill 导出的当前会话轨迹
 
 默认排除：
 
@@ -69,29 +70,33 @@ workspace 判断：
 
 如果被排除的材料有证据价值，在 `<task-slug>.md` 的 `Notes` 中写清原路径、原因、摘要和可访问位置；不要把大文件硬塞进上传。
 
-### 1.3 纳入 agents-log summary（如有）
+### 1.3 纳入任务轨迹
 
-如果 当前任务记录了 `.agents-log/summary/`，需要尝试识别并归档与当前任务相关的 agent log summary。
+先按原逻辑查找 `.agents-log/summary/`，识别并归档与当前任务相关的 agent log summary。
 
 处理规则：
 
 - 找到一个或多个相关 session 记录：全部复制到 archive 的 `workspace/agents-log/summary/` 下，保留原 timestamp 目录名和内部结构。
 - 如果 summary 目录中包含 `.DS_Store`、AppleDouble `._*`、缓存或临时文件，复制时排除。
+- 如果没有找到相关 `.agents-log` summary：触发或使用 `session-extractor` skill，以 structured 模式导出当前会话到 `workspace/session-extractor/`。
+- 不要在 backflow 中复写 `session-extractor` 的定位、解析或渲染逻辑；只按该 skill 的公开契约调用它。
+- 如果 `session-extractor` 失败，不阻塞本地 archive；在顶层 `<task-slug>.md` 的 `Notes` 和最终汇报里写清失败原因。
 
 推荐落盘形态：
 
 ```text
 .llm-wiki/backflow/<task-slug>/
 └── workspace/
-    └── agents-log/
-        └── summary/
-            └── 2026-05-20_09-52-44/
-                ├── summary.md
-                ├── usage.json
-                └── agents/
-                    └── main/
-                        ├── summary.md
-                        └── usage.json
+    ├── agents-log/
+    │   └── summary/
+    │       └── 2026-05-20_09-52-44/
+    │           ├── summary.md
+    │           ├── usage.json
+    │           └── agents/
+    │               └── main/
+    │                   ├── summary.md
+    │                   └── usage.json
+    └── session-extractor/        # 仅在未找到相关 .agents-log summary 时使用
 ```
 
 
@@ -114,13 +119,14 @@ workspace 判断：
     ├── progress.md         # 如有
     ├── wiki_usage.md       # 如有（query skill 写的页面使用记录）
     ├── agents-log/         # 如有相关 .agents-log summary
+    ├── session-extractor/  # 如无相关 .agents-log summary，fallback 使用
     └── ...
 ```
 
 - 先创建 `workspace/`，把所有相关的任务材料复制进去（保留必要的子目录结构），默认直接复制任务目录，并排除大文件。
 - 如果 workspace 是 git 仓库，可以把 `git status --short` 或 `git diff --no-ext-diff -- .` 保存为普通 workspace 文件。
 - 是否保存 diff、保存到哪里，根据当前任务判断。
-- 如有相关 agents-log summary，按第 1.3 节复制到 `workspace/agents-log/summary/`。
+- 如有相关 agents-log summary，按第 1.3 节复制到 `workspace/agents-log/summary/`；没有时按第 1.3 节使用 `session-extractor` fallback。
 - **不要**在归档目录里放真正的二进制（模型权重、profiler raw、大压缩包）。
 
 ### 1.5 编写顶层 <task-slug>.md
@@ -155,6 +161,10 @@ tags: [<场景/优化阶段/相关模型族等关键 tag>]
 
 `workspace/agents-log/summary/<timestamp>/summary.md` 路径（如有）
 
+## Session Extractor Trace
+
+`workspace/session-extractor/summary/<platform>/<timestamp>/summary.md` 路径（如 fallback 使用）
+
 ## Archive Layout
 
 ```text
@@ -169,6 +179,8 @@ backflow/<task-slug>/
     │           ├── summary.md
     │           ├── usage.json
     │           └── agents/...
+    ├── session-extractor/
+    │   └── summary/<platform>/<timestamp>/summary.md
     └── ...
 ```
 
@@ -176,7 +188,7 @@ backflow/<task-slug>/
 
 - 未归档的大文件、raw profiler、数据集、模型权重等在这里说明原路径、排除原因和可访问位置
 - 没有 `progress.md` 或任务轨迹不完整时，在这里说明证据链状况
-- 记录本次纳入了哪些 `.agents-log/summary/<timestamp>/`；如果未找到相关 summary，也在这里说明
+- 记录本次纳入了哪些 `.agents-log/summary/<timestamp>/`；如果未找到相关 summary，说明是否使用了 `session-extractor` fallback 以及输出路径或失败原因
 
 ````
 
@@ -189,7 +201,7 @@ backflow/<task-slug>/
 - 本地 archive 路径 `.llm-wiki/backflow/<task-slug>/`
 - 顶层 `<task-slug>.md` 一句话总结 + 文件大小（不复制全文）
 - 整个目录的文件清单（`find . -type f` 输出）+ 文件总数 + 总字节
-- 纳入了哪些 `.agents-log/summary/<timestamp>/`；如果没有找到相关 summary，明确说明已跳过
+- 纳入了哪些 `.agents-log/summary/<timestamp>/`；如果没有找到相关 summary，说明是否使用了 `session-extractor` fallback 以及输出路径或失败原因
 - 排除了哪些重要文件以及原因
 - 即将作为上传 `slug` 的值
 

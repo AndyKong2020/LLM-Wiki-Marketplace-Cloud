@@ -91,6 +91,11 @@ class TemplateInventoryTests(unittest.TestCase):
             "src/skills/llm-wiki-cloud-mount/SKILL.md.tmpl",
             "src/skills/llm-wiki-cloud-query/SKILL.md.tmpl",
             "src/skills/llm-wiki-cloud-backflow/SKILL.md.tmpl",
+            "src/skills/session-extractor/SKILL.md.tmpl",
+            "src/skills/session-extractor/scripts/extract.py",
+            "src/skills/session-extractor/scripts/sessionlog/adapters/claude.py",
+            "src/skills/session-extractor/scripts/sessionlog/adapters/codex.py",
+            "src/skills/session-extractor/scripts/sessionlog/adapters/opencode.py",
             "platforms/claude/marketplace.json.tmpl",
             "platforms/claude/plugin.json.tmpl",
             "platforms/codex/marketplace.json.tmpl",
@@ -130,6 +135,7 @@ class TemplateInventoryTests(unittest.TestCase):
             "src/skills/llm-wiki-cloud-mount/SKILL.md.tmpl",
             "src/skills/llm-wiki-cloud-query/SKILL.md.tmpl",
             "src/skills/llm-wiki-cloud-backflow/SKILL.md.tmpl",
+            "src/skills/session-extractor/SKILL.md.tmpl",
         ]:
             text = (ROOT / rel).read_text(encoding="utf-8")
             self.assertIn("version: {{version}}", text)
@@ -253,9 +259,11 @@ class SyncAdaptersTests(unittest.TestCase):
             "plugins/llm-wiki-client-claude/skills/llm-wiki-cloud-mount/SKILL.md",
             "plugins/llm-wiki-client-claude/skills/llm-wiki-cloud-query/SKILL.md",
             "plugins/llm-wiki-client-claude/skills/llm-wiki-cloud-backflow/SKILL.md",
+            "plugins/llm-wiki-client-claude/skills/session-extractor/SKILL.md",
             "plugins/llm-wiki-client-codex/skills/llm-wiki-cloud-mount/SKILL.md",
             "plugins/llm-wiki-client-codex/skills/llm-wiki-cloud-query/SKILL.md",
             "plugins/llm-wiki-client-codex/skills/llm-wiki-cloud-backflow/SKILL.md",
+            "plugins/llm-wiki-client-codex/skills/session-extractor/SKILL.md",
             "plugins/llm-wiki-client-opencode/opencode.json",
             "plugins/llm-wiki-client-opencode/bootstrap.sh",
             "plugins/llm-wiki-client-opencode/install-opencode.sh",
@@ -263,10 +271,59 @@ class SyncAdaptersTests(unittest.TestCase):
             "plugins/llm-wiki-client-opencode/skills/llm-wiki-cloud-mount/SKILL.md",
             "plugins/llm-wiki-client-opencode/skills/llm-wiki-cloud-query/SKILL.md",
             "plugins/llm-wiki-client-opencode/skills/llm-wiki-cloud-backflow/SKILL.md",
+            "plugins/llm-wiki-client-opencode/skills/session-extractor/SKILL.md",
         ]
         for rel in required:
             with self.subTest(rel=rel):
                 self.assertTrue((temp_root / rel).exists(), rel)
+
+    def test_session_extractor_support_files_are_copied(self):
+        temp_root = self.run_sync()
+        for platform in ["claude", "codex", "opencode"]:
+            skill_root = temp_root / f"plugins/llm-wiki-client-{platform}/skills/session-extractor"
+            with self.subTest(platform=platform):
+                self.assertTrue((skill_root / "SKILL.md").exists())
+                self.assertTrue((skill_root / "scripts/extract.py").exists())
+                self.assertTrue((skill_root / "scripts/sessionlog/render.py").exists())
+                self.assertFalse((skill_root / "scripts/tests").exists())
+
+    def test_backflow_uses_session_extractor_only_as_fallback(self):
+        temp_root = self.run_sync()
+        forbidden = [
+            "session_extractor_script",
+            "LLM_WIKI_SESSION_EXTRACTOR",
+            "cannot locate bundled session-extractor",
+            "rglob(",
+        ]
+        for platform in ["claude", "codex", "opencode"]:
+            rel = f"plugins/llm-wiki-client-{platform}/skills/llm-wiki-cloud-backflow/SKILL.md"
+            text = (temp_root / rel).read_text(encoding="utf-8")
+            with self.subTest(platform=platform):
+                self.assertIn(".agents-log/summary/", text)
+                self.assertIn("先按原逻辑查找 `.agents-log/summary/`", text)
+                self.assertIn("没有找到相关 `.agents-log` summary", text)
+                self.assertIn("session-extractor", text)
+                self.assertIn("workspace/session-extractor/", text)
+                self.assertIn("不要在 backflow 中复写 `session-extractor` 的定位、解析或渲染逻辑", text)
+                for snippet in forbidden:
+                    self.assertNotIn(snippet, text)
+
+    def test_embedded_session_extractor_tests_pass(self):
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "unittest",
+                "discover",
+                "-s",
+                "src/skills/session-extractor/scripts/tests",
+                "-v",
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_sync_replaces_all_template_variables(self):
         temp_root = self.run_sync()

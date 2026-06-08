@@ -92,6 +92,8 @@ MCP，并向当前客户端的项目指令文件写入 wiki 使用提示：
 任务进入 LLM/NPU 推理优化相关阶段时，触发 `llm-wiki-cloud-query` skill 通过
 MCP tools 查询 wiki。任务结束后可触发 `llm-wiki-cloud-backflow` 创建本地任务归档；
 若用户确认且配置了 `LLM_WIKI_UPLOAD_TOKEN`，插件会通过私有 HTTP backflow 入口上传归档。
+Backflow 会优先沿用项目里的 `.agents-log/summary/`；如果没有相关 summary，才使用
+内置 `session-extractor` skill 导出当前会话轨迹作为 fallback。
 
 固定入口：
 
@@ -124,8 +126,8 @@ python3 -m unittest discover -s tests -v
 ```
 
 `scripts/sync_adapters.py` 会生成 Claude Code、Codex 和 OpenCode 的 skills、manifest
-与 MCP 配置。维护生成产物时不要直接手改 `plugins/*/skills/**/SKILL.md` 或 manifest；
-应修改源模板后重新同步。
+与 MCP 配置，并复制 skill 自带的 `scripts/` 等支持文件。维护生成产物时不要直接手改
+`plugins/*/skills/**/SKILL.md` 或 manifest；应修改源模板后重新同步。
 
 正式发布前需要人工对比 Claude Code 适配输出与生产原版 skill 文档，确认差异只来自：
 
@@ -149,6 +151,9 @@ plugins/llm-wiki-client-claude/
     llm-wiki-cloud-mount/SKILL.md
     llm-wiki-cloud-query/SKILL.md
     llm-wiki-cloud-backflow/SKILL.md
+    session-extractor/
+      SKILL.md
+      scripts/extract.py
 plugins/llm-wiki-client-codex/
   .codex-plugin/plugin.json
   .mcp.json
@@ -156,6 +161,9 @@ plugins/llm-wiki-client-codex/
     llm-wiki-cloud-mount/SKILL.md
     llm-wiki-cloud-query/SKILL.md
     llm-wiki-cloud-backflow/SKILL.md
+    session-extractor/
+      SKILL.md
+      scripts/extract.py
 plugins/llm-wiki-client-opencode/
   bootstrap.sh
   install-opencode.sh
@@ -165,4 +173,7 @@ plugins/llm-wiki-client-opencode/
     llm-wiki-cloud-mount/SKILL.md
     llm-wiki-cloud-query/SKILL.md
     llm-wiki-cloud-backflow/SKILL.md
+    session-extractor/
+      SKILL.md
+      scripts/extract.py
 ```
