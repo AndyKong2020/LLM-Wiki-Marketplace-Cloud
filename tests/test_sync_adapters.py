@@ -300,7 +300,7 @@ class SyncAdaptersTests(unittest.TestCase):
             text = (temp_root / rel).read_text(encoding="utf-8")
             with self.subTest(platform=platform):
                 self.assertIn(".agents-log/summary/", text)
-                self.assertIn("先按原逻辑查找 `.agents-log/summary/`", text)
+                self.assertIn("在 workspace 中查找 `.agents-log/summary/`", text)
                 self.assertIn("没有找到相关 `.agents-log` summary", text)
                 self.assertIn("session-extractor", text)
                 self.assertIn("archive 的 `workspace/agents-log/`", text)
@@ -310,6 +310,7 @@ class SyncAdaptersTests(unittest.TestCase):
                 self.assertNotIn("Session Extractor Trace", text)
                 self.assertNotIn("不要在 backflow 中复写", text)
                 self.assertNotIn("定位、解析或渲染逻辑", text)
+                self.assertNotIn("原逻辑", text)
                 for snippet in forbidden:
                     self.assertNotIn(snippet, text)
 

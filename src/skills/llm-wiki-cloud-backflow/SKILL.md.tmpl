@@ -72,7 +72,7 @@ workspace 判断：
 
 ### 1.3 纳入任务轨迹
 
-先按原逻辑查找 `.agents-log/summary/`，识别并归档与当前任务相关的 agent log summary。
+在 workspace 中查找 `.agents-log/summary/`，根据当前任务时间、workspace、任务记录和最近相关 session，识别并归档与当前任务相关的 agent log summary。
 
 处理规则：
 
