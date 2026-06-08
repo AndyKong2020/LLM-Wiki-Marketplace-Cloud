@@ -20,7 +20,9 @@ from sessionlog import discover, layout  # noqa: E402
 from sessionlog import render as R  # noqa: E402
 from sessionlog import state as state_mod  # noqa: E402
 from sessionlog.adapters import claude  # noqa: E402
-from sessionlog.ir import AGENT_MAIN, AGENT_SUBAGENT, BLOCK_TEXT, Block, Event  # noqa: E402
+from sessionlog.ir import (  # noqa: E402
+    AGENT_MAIN, AGENT_SUBAGENT, BLOCK_TEXT, BLOCK_TOOL_RESULT, KIND_USER, Block, Event,
+)
 
 SID = "11111111-2222-3333-4444-555555555555"
 CWD = "/work/proj"
@@ -150,22 +152,26 @@ class RenderTests(unittest.TestCase):
         layout.update_state(self.session, st)
         return st
 
+    def _flat_base(self) -> Path:
+        # flat 去 platform 后落在 out_root 根下、与 meta/summary 平级 -> 排除这俩定位时间戳目录
+        bases = [p for p in self.out.iterdir() if p.is_dir() and p.name not in ("meta", "summary")]
+        self.assertEqual(len(bases), 1)
+        return bases[0]
+
     def test_structured_files_exist(self):
         self._run("structured")
-        base = self.out / "meta" / "sessions" / "claude" / "2026" / "01" / SID
+        base = self.out / "meta" / "sessions" / "2026" / "01" / SID
         self.assertTrue((base / "index.md").is_file())
         self.assertTrue((base / "merged" / "session.md").is_file())
         self.assertTrue((base / "agents" / "main" / "session.md").is_file())
         self.assertTrue((base / "agents" / "explore-1" / "session.md").is_file())
-        sum_dirs = [p for p in (self.out / "summary" / "claude").iterdir() if p.is_dir()]
+        sum_dirs = [p for p in (self.out / "summary").iterdir() if p.is_dir()]
         self.assertEqual(len(sum_dirs), 1)  # 单个时间戳文件夹，无 YYYY/MM 多层、无漂移
 
     def test_flat_files_exist(self):
         self._run("flat")
         # flat 是单个本地时间戳文件夹（时区相关）-> 用 iterdir 定位，不硬编码
-        bases = [p for p in (self.out / "claude").iterdir() if p.is_dir()]
-        self.assertEqual(len(bases), 1)
-        base = bases[0]
+        base = self._flat_base()
         self.assertTrue((base / "index.md").is_file())
         self.assertTrue((base / "main.md").is_file())
         self.assertTrue((base / "explore-1.md").is_file())
@@ -173,7 +179,7 @@ class RenderTests(unittest.TestCase):
     def test_flat_is_clean_detailed_flow(self):
         # flat = 人读完整详细流水：无 Conversation 段、过滤记账 meta（file-history-snapshot）、完整内联
         self._run("flat")
-        base = next(p for p in (self.out / "claude").iterdir() if p.is_dir())
+        base = self._flat_base()
         main_md = (base / "main.md").read_text(encoding="utf-8")
         self.assertNotIn("## Conversation", main_md)            # 无精简对话段
         self.assertIn("## Timeline", main_md)
@@ -193,7 +199,7 @@ class RenderTests(unittest.TestCase):
     def test_agent_summary_has_meta_links(self):
         # 对齐 .agents-log：agent summary 要有 Detailed log + Detailed index 两个到 meta 的链接
         self._run("structured")
-        agent_sums = [p for p in (self.out / "summary" / "claude").rglob("summary.md") if p.parent.name == "main"]
+        agent_sums = [p for p in (self.out / "summary").rglob("summary.md") if p.parent.name == "main"]
         self.assertEqual(len(agent_sums), 1)
         text = agent_sums[0].read_text(encoding="utf-8")
         self.assertIn("Detailed log", text)
@@ -202,7 +208,7 @@ class RenderTests(unittest.TestCase):
 
     def test_tool_call_rendered(self):
         self._run("structured")
-        detail = (self.out / "meta" / "sessions" / "claude" / "2026" / "01" / SID
+        detail = (self.out / "meta" / "sessions" / "2026" / "01" / SID
                   / "agents" / "main" / "session.md").read_text(encoding="utf-8")
         self.assertIn("Tool Call `Bash`", detail)
         self.assertIn("file1", detail)  # tool result content
@@ -211,14 +217,14 @@ class RenderTests(unittest.TestCase):
         # 回归 #3：state 丢失/损坏重建时 summary 不漂移、不产生 -02 重复树。
         self._run("structured")
         layout.run_structured(self.session, self.out, {})  # 全新空 state 模拟丢失
-        sum_dirs = [p for p in (self.out / "summary" / "claude").iterdir() if p.is_dir()]
+        sum_dirs = [p for p in (self.out / "summary").iterdir() if p.is_dir()]
         self.assertEqual(len(sum_dirs), 1)  # 单个时间戳文件夹，无 YYYY/MM 多层、无漂移
 
     def test_orphan_agent_pruned(self):
         # 回归 #5：agent 集合缩小后旧 per-agent 产物被清理。
         st = self._run("both")
-        sub_meta = self.out / "meta" / "sessions" / "claude" / "2026" / "01" / SID / "agents" / "explore-1"
-        flat_base = next(p for p in (self.out / "claude").iterdir() if p.is_dir())
+        sub_meta = self.out / "meta" / "sessions" / "2026" / "01" / SID / "agents" / "explore-1"
+        flat_base = self._flat_base()
         sub_flat = flat_base / "explore-1.md"
         self.assertTrue(sub_meta.is_dir())
         self.assertTrue(sub_flat.is_file())
@@ -257,7 +263,94 @@ class RenderTests(unittest.TestCase):
         layout.run_flat(self.session, self.out, st1)
         after = sorted(p.relative_to(self.out).as_posix() for p in self.out.rglob("*") if p.is_file())
         self.assertEqual(before, after)
-        self.assertEqual(len([p for p in (self.out / "summary" / "claude").iterdir() if p.is_dir()]), 1)
+        self.assertEqual(len([p for p in (self.out / "summary").iterdir() if p.is_dir()]), 1)
+
+    def test_incremental_growth_idempotent(self):
+        # 增量幂等（内容增长）：同一 session 追加事件后重跑，仍写同一目录、覆盖刷新、
+        # 不漂移、不堆目录、.owner 稳定，新内容反映、外溢 artifact 刷新。
+        st = {}
+        layout.run_structured(self.session, self.out, st)
+        sdir = st["structured"]["summary_dir"]
+        mdir = st["structured"]["meta_session_dir"]
+        owner0 = (self.out / sdir / ".owner").read_text(encoding="utf-8")
+        # 模拟会话增长：main 追加一段会外溢的大输出 + 一个可识别标记
+        main = self.session.main_agent()
+        big = "Z" * 5000
+        last_ts = main.events[-1].timestamp
+        main.events.append(Event(seq=500, timestamp=last_ts, kind=KIND_USER, role="user", is_main=True,
+                                 blocks=[Block(type=BLOCK_TOOL_RESULT, tool_use_id="g", value=big)]))
+        main.events.append(Event(seq=501, timestamp=last_ts, kind=KIND_USER, role="user", is_main=True,
+                                 blocks=[Block(type=BLOCK_TEXT, text="NEW_INCREMENTAL_MARKER")]))
+        layout.run_structured(self.session, self.out, st)  # 复用 state -> 增量刷新
+        # 1) 路径不漂移
+        self.assertEqual(st["structured"]["summary_dir"], sdir)
+        self.assertEqual(st["structured"]["meta_session_dir"], mdir)
+        # 2) summary 仍只 1 个时间戳目录（不堆、无碰撞后缀）
+        self.assertEqual(len([p for p in (self.out / "summary").iterdir() if p.is_dir()]), 1)
+        # 3) .owner 不变
+        self.assertEqual((self.out / sdir / ".owner").read_text(encoding="utf-8"), owner0)
+        # 4) 新内容反映在详细时间线
+        detail = (self.out / mdir / "agents" / "main" / "session.md").read_text(encoding="utf-8")
+        self.assertIn("NEW_INCREMENTAL_MARKER", detail)
+        # 5) 增长的大输出外溢到 meta artifacts（覆盖刷新生效）
+        rendered = [f for f in (self.out / mdir / "artifacts" / "main" / "rendered").iterdir() if f.is_file()]
+        self.assertTrue(any(f.read_text(encoding="utf-8") == big for f in rendered))
+
+    def test_stamp_collision_no_clobber(self):
+        # 回归：两会话 started_at 同秒、不同 sid 时，summary 不互毁（碰撞自动加 __<sid> 后缀）。
+        A = self.session  # claude / SID，含 main + explore-1
+        B = dataclasses.replace(
+            self.session,
+            session_id="99999999-aaaa-bbbb-cccc-dddddddddddd",
+            platform="codex",
+            agents=[a for a in self.session.agents if a.key == "main"],  # B 只有 main
+        )
+        layout.run_structured(A, self.out, {})
+        a_sub = next(p for p in (self.out / "summary").rglob("summary.md") if p.parent.name == "explore-1")
+        self.assertTrue(a_sub.is_file())
+        layout.run_structured(B, self.out, {})  # 同 started_at -> 同 stamp -> 碰撞
+        self.assertTrue(a_sub.is_file(), "碰撞时 A 的 subagent 产物被误删")
+        sum_dirs = sorted(p.name for p in (self.out / "summary").iterdir() if p.is_dir())
+        self.assertEqual(len(sum_dirs), 2, f"碰撞应产生 2 个独立 summary 目录，实际 {sum_dirs}")
+        # B 的目录带 sid 后缀；A 的是纯时间戳
+        self.assertTrue(any("__99999999" in d for d in sum_dirs), sum_dirs)
+        # 各自 .owner 标记归属正确
+        a_owner = (self.out / "summary" / next(d for d in sum_dirs if "__" not in d) / ".owner").read_text()
+        self.assertIn(f"claude__{SID}", a_owner)
+
+    def test_collision_idempotent_reuse_owner(self):
+        # 碰撞后重跑 B（带 state），应复用带后缀目录、不再新建，且认得自己的 .owner。
+        A = self.session
+        B = dataclasses.replace(self.session, session_id="99999999-aaaa-bbbb-cccc-dddddddddddd",
+                                platform="codex", agents=[a for a in self.session.agents if a.key == "main"])
+        layout.run_structured(A, self.out, {})
+        stB = {}
+        layout.run_structured(B, self.out, stB)
+        first = stB["structured"]["summary_dir"]
+        layout.run_structured(B, self.out, stB)  # 复用 state
+        self.assertEqual(stB["structured"]["summary_dir"], first)
+        self.assertEqual(len([p for p in (self.out / "summary").iterdir() if p.is_dir()]), 2)
+
+    def test_summary_artifacts_reuse_meta(self):
+        # 对齐 .agents-log：summary 树自身不产 artifacts/rendered；超阈值外溢复用 meta 树的 rendered（同内容去重）。
+        big = "X" * 5000  # 超过 SUMMARY_VALUE_INLINE_LIMIT(1200) 与 TOOL_RESULT_INLINE_LIMIT(4000)
+        main = self.session.main_agent()
+        main.events.append(Event(
+            seq=999, timestamp=main.events[-1].timestamp, kind=KIND_USER, role="user", is_main=True,
+            blocks=[Block(type=BLOCK_TOOL_RESULT, tool_use_id="big", value=big)],
+        ))
+        self._run("structured")
+        # summary 树下不应出现任何 artifacts/rendered 目录（即便没外溢也不该有空目录）
+        self.assertEqual(list((self.out / "summary").rglob("rendered")), [])
+        self.assertEqual(list((self.out / "summary").rglob("artifacts")), [])
+        # 外溢文件落在 meta 树、内容完整
+        rendered_files = [f for f in (self.out / "meta").rglob("*") if f.is_file() and "rendered" in f.parts]
+        self.assertTrue(any(f.read_text(encoding="utf-8") == big for f in rendered_files))
+        # agent summary 的外溢链接跨树指向 meta
+        main_sum = next(p for p in (self.out / "summary").rglob("summary.md") if p.parent.name == "main")
+        txt = main_sum.read_text(encoding="utf-8")
+        self.assertIn("Open full artifact", txt)
+        self.assertIn("meta/sessions/", txt)
 
 
 class UtilTests(unittest.TestCase):

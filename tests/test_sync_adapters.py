@@ -303,8 +303,11 @@ class SyncAdaptersTests(unittest.TestCase):
                 self.assertIn("先按原逻辑查找 `.agents-log/summary/`", text)
                 self.assertIn("没有找到相关 `.agents-log` summary", text)
                 self.assertIn("session-extractor", text)
-                self.assertIn("workspace/session-extractor/", text)
+                self.assertIn("archive 的 `workspace/agents-log/`", text)
+                self.assertIn("同形态", text)
                 self.assertIn("不要在 backflow 中复写 `session-extractor` 的定位、解析或渲染逻辑", text)
+                self.assertNotIn("workspace/session-extractor/", text)
+                self.assertNotIn("Session Extractor Trace", text)
                 for snippet in forbidden:
                     self.assertNotIn(snippet, text)
 

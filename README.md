@@ -93,7 +93,7 @@ MCP，并向当前客户端的项目指令文件写入 wiki 使用提示：
 MCP tools 查询 wiki。任务结束后可触发 `llm-wiki-cloud-backflow` 创建本地任务归档；
 若用户确认且配置了 `LLM_WIKI_UPLOAD_TOKEN`，插件会通过私有 HTTP backflow 入口上传归档。
 Backflow 会优先沿用项目里的 `.agents-log/summary/`；如果没有相关 summary，才使用
-内置 `session-extractor` skill 导出当前会话轨迹作为 fallback。
+内置 `session-extractor` skill 补齐同形态的 agent log summary。
 
 固定入口：
 

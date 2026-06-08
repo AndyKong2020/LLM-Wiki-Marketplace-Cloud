@@ -86,32 +86,32 @@ python3 <session-extractor-skill-dir>/scripts/extract.py --platform <platform> -
 
 ## 输出结构
 
-**structured（默认）**——贴合原版双树（结构对齐 `.agents-log`）：
+**structured（默认）**——贴合原版双树（结构对齐 `.agents-log`，无 `<platform>` 层）：
 ```
 .session-extractor/
-├─ summary/<platform>/<时间戳>/                # 人读总览（单个本地时间戳文件夹）
+├─ summary/<时间戳>/                            # 人读总览（单时间戳，无 platform 层）
 │  ├─ summary.md  usage.json
-│  └─ agents/<key>/{summary.md,usage.json}
+│  └─ agents/<key>/{summary.md,usage.json}     # 外溢复用 meta 的 artifacts、自身无 rendered
 └─ meta/                                       # 详细+取证+索引+状态
-   ├─ index.md                                # 全局索引（所有会话）
-   ├─ state/<platform>__<sid>.json            # 幂等状态（产物相对路径）
-   ├─ locks/                                  # 会话级文件锁
-   └─ sessions/<platform>/YYYY/MM/<sid>/
-      ├─ index.md   merged/session.md         # 跨 agent 合并时间线
-      ├─ agents/<key>/session.md              # 每 agent 详细时间线
-      └─ artifacts/{shared,<key>}/rendered/   # 大内容外溢
+   ├─ index.md                                 # 全局索引（所有会话）
+   ├─ state/<platform>__<sid>.json             # 幂等状态（产物相对路径）
+   ├─ locks/                                   # 会话级文件锁
+   └─ sessions/YYYY/MM/<sid>/                  # 无 platform 层；sid 全局唯一
+      ├─ index.md   merged/session.md          # 跨 agent 合并时间线
+      ├─ agents/<key>/session.md               # 每 agent 详细时间线
+      └─ artifacts/{shared,<key>}/rendered/    # 大内容外溢（summary 与 detail 共用）
 ```
 
 **flat**——每 session 一目录、每 agent 一个自包含大 md：
 ```
-.session-extractor/<platform>/<时间戳>/
+.session-extractor/<时间戳>/
 ├─ index.md   main.md   <subagent>.md   usage.json
 ```
-（flat 也共用 `meta/state/`、`meta/index.md` 做状态与全局索引。）
+（flat 目录与 `meta/`、`summary/` 平级、无 platform 层；也共用 `meta/state/`、`meta/index.md` 做状态与全局索引。）
 
 flat 的 `main.md`/`<subagent>.md` 是**人读的完整详细流水**：元信息 + Usage + 一条详细 Timeline（每条事件含 role/model/usage，**工具输入/输出完整内联、不截断、不外溢**）。会**过滤掉记账/元事件**（hook 输出 attachment、mode、permission-mode、ai-title、file-history-snapshot、last-prompt、非错误级 system），只留对话/工具/错误。需要逐条取证完整（含全部记账事件）请看 `meta/`。
 
-summary/agent summary 行为对齐 `.agents-log`：每段超阈值（文本 4000 / 工具结果 1200，超出截断到 ~400 字符）外溢成 `rendered/` 文件并留链接；agent summary 含 `Detailed log`、`Detailed index` 两个到 meta 的链接。
+summary/agent summary 行为对齐 `.agents-log`：每段超阈值（文本 4000 / 工具结果 1200，超出截断到 ~400 字符）外溢成 **meta 树**的 `rendered/` 文件并留跨树链接（summary 树自身不含 artifacts，与 `.agents-log` 一致）；agent summary 含 `Detailed log`、`Detailed index` 两个到 meta 的链接。
 
 ## 行为约定
 
@@ -119,3 +119,4 @@ summary/agent summary 行为对齐 `.agents-log`：每段超阈值（文本 4000
 - 平台与 session 身份**优先取自继承的环境变量**；缺权威信号时**直接报错**并提示用 `--session`，不静默猜测。
 - 大段文本 / 结构化对象 / base64 图片超阈值会**外溢**成 `rendered/` 文件，正文留摘要+相对链接。
 - 坏数据不致命：无法解析的行计入 `parse_warnings` 并在文档里提示，不静默丢弃。
+- **同秒碰撞防护**：summary/flat 用时间戳目录名；两会话 `started_at` 撞同一秒时，后到者靠各目录的 `.owner`（`platform__sid`）识别归属、自动加 `__<sid>` 后缀，绝不互毁（meta 树按 sid 命名本就不撞）。
