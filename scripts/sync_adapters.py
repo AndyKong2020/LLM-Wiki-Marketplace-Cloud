@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 from pathlib import Path
 
 
@@ -214,13 +213,6 @@ def unlink_known_file(path: Path) -> None:
         path.unlink()
 
 
-def remove_known_path(path: Path) -> None:
-    if path.is_file() or path.is_symlink():
-        path.unlink()
-    elif path.is_dir():
-        shutil.rmtree(path)
-
-
 def prune_empty_dirs(path: Path, stop: Path) -> None:
     while path != stop and path != ROOT:
         try:
@@ -251,7 +243,7 @@ def clean_generated_dirs() -> None:
     for root_rel in GENERATED_SKILL_ROOTS:
         root = ROOT / root_rel
         for skill_name in MANAGED_SKILL_NAMES:
-            remove_known_path(root / skill_name)
+            unlink_known_file(root / skill_name / "SKILL.md")
             prune_empty_dirs(root / skill_name, root)
 
     prune_empty_dirs(ROOT / "dist/opencode", ROOT / "dist")
@@ -316,25 +308,7 @@ def generate_skills(values: dict[str, str], output_root: str) -> None:
     for template_path in sorted((ROOT / "src/skills").glob("*/SKILL.md.tmpl")):
         skill_name = template_path.parent.name
         rendered = render_template(template_path, values)
-        output_dir = ROOT / output_root / skill_name
-        write_text(output_dir / "SKILL.md", rendered)
-        copy_skill_support_files(template_path.parent, output_dir)
-
-
-def copy_skill_support_files(source_dir: Path, output_dir: Path) -> None:
-    for child in sorted(source_dir.iterdir()):
-        if child.name == "SKILL.md.tmpl":
-            continue
-        destination = output_dir / child.name
-        if child.is_dir():
-            shutil.copytree(
-                child,
-                destination,
-                dirs_exist_ok=True,
-                ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "tests"),
-            )
-        elif child.is_file():
-            shutil.copy2(child, destination)
+        write_text(ROOT / output_root / skill_name / "SKILL.md", rendered)
 
 
 def main() -> None:
