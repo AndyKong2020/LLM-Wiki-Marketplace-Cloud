@@ -91,6 +91,10 @@ class TemplateInventoryTests(unittest.TestCase):
             "src/skills/llm-wiki-cloud-mount/SKILL.md.tmpl",
             "src/skills/llm-wiki-cloud-query/SKILL.md.tmpl",
             "src/skills/llm-wiki-cloud-backflow/SKILL.md.tmpl",
+            "src/skills/llm-wiki-cloud-backflow/scripts/extract.py",
+            "src/skills/llm-wiki-cloud-backflow/scripts/sessionlog/adapters/claude.py",
+            "src/skills/llm-wiki-cloud-backflow/scripts/sessionlog/adapters/codex.py",
+            "src/skills/llm-wiki-cloud-backflow/scripts/sessionlog/adapters/opencode.py",
             "platforms/claude/marketplace.json.tmpl",
             "platforms/claude/plugin.json.tmpl",
             "platforms/codex/marketplace.json.tmpl",
@@ -135,6 +139,23 @@ class TemplateInventoryTests(unittest.TestCase):
             self.assertIn("version: {{version}}", text)
             self.assertIn("name:", text)
             self.assertIn("description:", text)
+
+    def test_embedded_session_extractor_tests_pass(self):
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "unittest",
+                "discover",
+                "-s",
+                "src/skills/llm-wiki-cloud-backflow/scripts/tests",
+                "-v",
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 class SyncAdaptersTests(unittest.TestCase):
     FIXTURE_PATHS = [
@@ -253,9 +274,13 @@ class SyncAdaptersTests(unittest.TestCase):
             "plugins/llm-wiki-client-claude/skills/llm-wiki-cloud-mount/SKILL.md",
             "plugins/llm-wiki-client-claude/skills/llm-wiki-cloud-query/SKILL.md",
             "plugins/llm-wiki-client-claude/skills/llm-wiki-cloud-backflow/SKILL.md",
+            "plugins/llm-wiki-client-claude/skills/llm-wiki-cloud-backflow/scripts/extract.py",
+            "plugins/llm-wiki-client-claude/skills/llm-wiki-cloud-backflow/scripts/sessionlog/adapters/claude.py",
             "plugins/llm-wiki-client-codex/skills/llm-wiki-cloud-mount/SKILL.md",
             "plugins/llm-wiki-client-codex/skills/llm-wiki-cloud-query/SKILL.md",
             "plugins/llm-wiki-client-codex/skills/llm-wiki-cloud-backflow/SKILL.md",
+            "plugins/llm-wiki-client-codex/skills/llm-wiki-cloud-backflow/scripts/extract.py",
+            "plugins/llm-wiki-client-codex/skills/llm-wiki-cloud-backflow/scripts/sessionlog/adapters/codex.py",
             "plugins/llm-wiki-client-opencode/opencode.json",
             "plugins/llm-wiki-client-opencode/bootstrap.sh",
             "plugins/llm-wiki-client-opencode/install-opencode.sh",
@@ -263,6 +288,8 @@ class SyncAdaptersTests(unittest.TestCase):
             "plugins/llm-wiki-client-opencode/skills/llm-wiki-cloud-mount/SKILL.md",
             "plugins/llm-wiki-client-opencode/skills/llm-wiki-cloud-query/SKILL.md",
             "plugins/llm-wiki-client-opencode/skills/llm-wiki-cloud-backflow/SKILL.md",
+            "plugins/llm-wiki-client-opencode/skills/llm-wiki-cloud-backflow/scripts/extract.py",
+            "plugins/llm-wiki-client-opencode/skills/llm-wiki-cloud-backflow/scripts/sessionlog/adapters/opencode.py",
         ]
         for rel in required:
             with self.subTest(rel=rel):
@@ -321,6 +348,25 @@ class SyncAdaptersTests(unittest.TestCase):
         for text in [codex_mount, opencode_mount]:
             self.assertNotIn("低于 1.2.0", text)
             self.assertNotIn("`/plugins`", text)
+
+    def test_backflow_embeds_session_extractor_support_files(self):
+        temp_root = self.run_sync()
+        platforms = {
+            "claude": "plugins/llm-wiki-client-claude/skills/llm-wiki-cloud-backflow",
+            "codex": "plugins/llm-wiki-client-codex/skills/llm-wiki-cloud-backflow",
+            "opencode": "plugins/llm-wiki-client-opencode/skills/llm-wiki-cloud-backflow",
+        }
+        for platform, rel in platforms.items():
+            with self.subTest(platform=platform):
+                root = temp_root / rel
+                skill = (root / "SKILL.md").read_text(encoding="utf-8")
+                self.assertIn("session-extractor", skill)
+                self.assertIn(f"--platform {platform}", skill)
+                self.assertIn("不依赖外部 `.agents-log` 先运行", skill)
+                self.assertIn("session_trace_status=ok | failed", skill)
+                self.assertTrue((root / "scripts/extract.py").exists())
+                self.assertTrue((root / "scripts/sessionlog/render.py").exists())
+                self.assertFalse((root / "scripts/tests").exists())
 
     def test_sync_embeds_pre_rendered_pin_block_in_mount_skills(self):
         temp_root = self.run_sync()

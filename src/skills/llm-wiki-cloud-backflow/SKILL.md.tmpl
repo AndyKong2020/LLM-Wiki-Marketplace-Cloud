@@ -12,7 +12,7 @@ version: {{version}}
 ```text
 llm-wiki-cloud-backflow
     |
-    +--> 1. 轨迹归档：把本次任务整理成本地目录 .llm-wiki/backflow/<task-slug>/
+    +--> 1. 轨迹归档：运行内置 session-extractor，并把本次任务整理成本地目录 .llm-wiki/backflow/<task-slug>/
     |     （顶层 <task-slug>.md + workspace/ 等附件）
     |
     +--> 2. 轨迹上传：归档汇报后经用户确认，如配置 LLM_WIKI_UPLOAD_TOKEN，
@@ -56,7 +56,8 @@ workspace 判断：
 - 任务相关源码、配置、小型脚本、README、命令记录
 - 任务侧 patch、diff、git status，作为普通 workspace 材料保存
 - 小型 benchmark 摘要、profiling 摘要、结论截图或文本报告
-- 与当前任务相关的 `.agents-log/summary/<timestamp>/` 目录（如果存在）
+- 内置 session-extractor 生成的当前会话轨迹：`workspace/session-extractor/`
+- 既有 `.agents-log/summary/<timestamp>/` 目录（如果存在，仅作为 legacy 附件）
 
 默认排除：
 
@@ -64,18 +65,90 @@ workspace 判断：
 - 构建产物、依赖目录、缓存目录、虚拟环境
 - 大体积二进制文件
 - credentials、tokens、keys、`.env*`
-- `.git/`、`.idea/`、`.vscode/`、`.llm-wiki/backflow/`（避免递归归档）
-- 若有 `.agents-log`，默认不上传 `meta/` 目录
+- `.git/`、`.idea/`、`.vscode/`、`.llm-wiki/backflow/`、`.session-extractor/`（避免递归归档）
+- 若有 legacy `.agents-log`，默认不上传 `meta/` 目录
 
 如果被排除的材料有证据价值，在 `<task-slug>.md` 的 `Notes` 中写清原路径、原因、摘要和可访问位置；不要把大文件硬塞进上传。
 
-### 1.3 纳入 agents-log summary（如有）
+### 1.3 生成并纳入 session 轨迹
 
-如果 当前任务记录了 `.agents-log/summary/`，需要尝试识别并归档与当前任务相关的 agent log summary。
+backflow 必须在归档阶段自己生成当前会话轨迹，不依赖外部 `.agents-log` 先运行。
+
+先定位本 skill 内置的 session-extractor 脚本。脚本随 `llm-wiki-cloud-backflow` 一起发布，路径通常是当前 skill 目录下的 `scripts/extract.py`。如果当前客户端没有直接暴露 skill 目录，就用下面的 Bash 片段查找：
+
+```bash
+session_extractor_script="$(
+python3 - <<'PY'
+import os
+from pathlib import Path
+
+names = [
+    "llm-wiki-cloud-backflow/scripts/extract.py",
+    "plugins/llm-wiki-client-{{platform}}/skills/llm-wiki-cloud-backflow/scripts/extract.py",
+]
+env_file = os.environ.get("LLM_WIKI_SESSION_EXTRACTOR")
+if env_file and Path(env_file).expanduser().is_file():
+    print(Path(env_file).expanduser())
+    raise SystemExit(0)
+
+search_roots = []
+for key in ["CLAUDE_PLUGIN_ROOT", "CODEX_PLUGIN_ROOT", "OPENCODE_PLUGIN_ROOT"]:
+    value = os.environ.get(key)
+    if value:
+        search_roots.append(Path(value).expanduser())
+
+home = Path.home()
+search_roots.extend([
+    home / ".config" / "opencode" / "skills",
+    home / ".codex" / "plugins" / "cache",
+    home / ".agents" / "plugins" / "cache",
+    home / ".claude" / "plugins",
+])
+
+direct_roots = search_roots + [Path.cwd(), *list(Path.cwd().parents)[:4]]
+
+for root in direct_roots:
+    if not root.exists():
+        continue
+    for rel in names:
+        candidate = root / rel
+        if candidate.is_file():
+            print(candidate)
+            raise SystemExit(0)
+
+for root in search_roots:
+    if not root.exists():
+        continue
+    for candidate in root.rglob("skills/llm-wiki-cloud-backflow/scripts/extract.py"):
+        if candidate.is_file():
+            print(candidate)
+            raise SystemExit(0)
+
+raise SystemExit("cannot locate bundled session-extractor scripts/extract.py")
+PY
+)"
+```
+
+然后显式传入当前平台，输出到 archive 内：
+
+```bash
+session_trace_dir="${archive_root}/workspace/session-extractor"
+mkdir -p "${session_trace_dir}"
+
+python3 "${session_extractor_script}" \
+  --platform {{platform}} \
+  --mode structured \
+  --out "${session_trace_dir}" \
+  --cwd "${workspace}"
+
+rm -rf "${session_trace_dir}/meta/locks"
+```
 
 处理规则：
 
-- 找到一个或多个相关 session 记录：全部复制到 archive 的 `workspace/agents-log/summary/` 下，保留原 timestamp 目录名和内部结构。
+- 脚本成功：把 `workspace/session-extractor/summary/` 和 `workspace/session-extractor/meta/` 一起保留在 archive 中，但删除 `workspace/session-extractor/meta/locks/`，它只是幂等锁文件，不是轨迹证据。
+- 脚本失败：不要阻断归档；把 stderr/stdout 摘要写入 `<task-slug>.md` 的 `Notes`，并在最终汇报中说明 `session_trace_status=failed`。
+- 如果已有 legacy `.agents-log/summary/` 且与当前任务相关，可以额外复制到 `workspace/agents-log/summary/`；但不得把它作为唯一轨迹来源。
 - 如果 summary 目录中包含 `.DS_Store`、AppleDouble `._*`、缓存或临时文件，复制时排除。
 
 推荐落盘形态：
@@ -83,7 +156,21 @@ workspace 判断：
 ```text
 .llm-wiki/backflow/<task-slug>/
 └── workspace/
-    └── agents-log/
+    ├── session-extractor/
+    │   ├── summary/
+    │   │   └── {{platform}}/
+    │   │       └── <timestamp>/
+    │   │           ├── summary.md
+    │   │           ├── usage.json
+    │   │           └── agents/
+    │   │               └── main/
+    │   │                   ├── summary.md
+    │   │                   └── usage.json
+    │   └── meta/
+    │       ├── index.md
+    │       └── sessions/
+    │           └── {{platform}}/...
+    └── agents-log/              # legacy，如已有
         └── summary/
             └── 2026-05-20_09-52-44/
                 ├── summary.md
@@ -113,14 +200,16 @@ workspace 判断：
 └── workspace/              # 任务现场材料
     ├── progress.md         # 如有
     ├── wiki_usage.md       # 如有（query skill 写的页面使用记录）
-    ├── agents-log/         # 如有相关 .agents-log summary
+    ├── session-extractor/  # backflow 内置脚本生成的当前会话轨迹
+    ├── agents-log/         # legacy，如已有相关 .agents-log summary
     └── ...
 ```
 
 - 先创建 `workspace/`，把所有相关的任务材料复制进去（保留必要的子目录结构），默认直接复制任务目录，并排除大文件。
 - 如果 workspace 是 git 仓库，可以把 `git status --short` 或 `git diff --no-ext-diff -- .` 保存为普通 workspace 文件。
 - 是否保存 diff、保存到哪里，根据当前任务判断。
-- 如有相关 agents-log summary，按第 1.3 节复制到 `workspace/agents-log/summary/`。
+- 按第 1.3 节运行内置 session-extractor，把结果写入 `workspace/session-extractor/`。
+- 如有相关 legacy agents-log summary，可额外复制到 `workspace/agents-log/summary/`。
 - **不要**在归档目录里放真正的二进制（模型权重、profiler raw、大压缩包）。
 
 ### 1.5 编写顶层 <task-slug>.md
@@ -147,13 +236,17 @@ tags: [<场景/优化阶段/相关模型族等关键 tag>]
 
 `workspace/progress.md` 路径（如有）
 
+## Session Trace
+
+`workspace/session-extractor/summary/{{platform}}/<timestamp>/summary.md` 路径（由 backflow 内置 session-extractor 生成）
+
 ## Wiki Usage History
 
 `workspace/wiki_usage.md` 路径（如有）
 
-## Agents Log Summary
+## Legacy Agents Log Summary
 
-`workspace/agents-log/summary/<timestamp>/summary.md` 路径（如有）
+`workspace/agents-log/summary/<timestamp>/summary.md` 路径（如有 legacy .agents-log）
 
 ## Archive Layout
 
@@ -163,6 +256,9 @@ backflow/<task-slug>/
 └── workspace/
     ├── progress.md
     ├── wiki_usage.md
+    ├── session-extractor/
+    │   ├── summary/{{platform}}/<timestamp>/
+    │   └── meta/
     ├── agents-log/
     │   └── summary/
     │       └── <timestamp>/
@@ -176,7 +272,7 @@ backflow/<task-slug>/
 
 - 未归档的大文件、raw profiler、数据集、模型权重等在这里说明原路径、排除原因和可访问位置
 - 没有 `progress.md` 或任务轨迹不完整时，在这里说明证据链状况
-- 记录本次纳入了哪些 `.agents-log/summary/<timestamp>/`；如果未找到相关 summary，也在这里说明
+- 记录 session-extractor 执行状态、生成的 summary 路径；如果失败，写明失败原因和是否纳入 legacy `.agents-log`
 
 ````
 
@@ -189,7 +285,8 @@ backflow/<task-slug>/
 - 本地 archive 路径 `.llm-wiki/backflow/<task-slug>/`
 - 顶层 `<task-slug>.md` 一句话总结 + 文件大小（不复制全文）
 - 整个目录的文件清单（`find . -type f` 输出）+ 文件总数 + 总字节
-- 纳入了哪些 `.agents-log/summary/<timestamp>/`；如果没有找到相关 summary，明确说明已跳过
+- `session_trace_status=ok | failed`，以及 `workspace/session-extractor/summary/.../summary.md` 路径；如果失败，说明原因
+- 纳入了哪些 legacy `.agents-log/summary/<timestamp>/`；如果没有找到相关 summary，明确说明已跳过
 - 排除了哪些重要文件以及原因
 - 即将作为上传 `slug` 的值
 
