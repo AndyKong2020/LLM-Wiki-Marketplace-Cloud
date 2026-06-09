@@ -89,15 +89,15 @@ workspace 判断：
 ```text
 .llm-wiki/backflow/<task-slug>/
 └── workspace/
-    ├── agents-log/
-    │   └── summary/
-    │       └── 2026-05-20_09-52-44/
-    │           ├── summary.md
-    │           ├── usage.json
-    │           └── agents/
-    │               └── main/
-    │                   ├── summary.md
-    │                   └── usage.json
+    └── agents-log/
+        └── summary/
+            └── 2026-05-20_09-52-44/
+                ├── summary.md
+                ├── usage.json
+                └── agents/
+                    └── main/
+                        ├── summary.md
+                        └── usage.json
 ```
 
 
