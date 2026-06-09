@@ -66,7 +66,7 @@ workspace 判断：
 - 大体积二进制文件
 - credentials、tokens、keys、`.env*`
 - `.git/`、`.idea/`、`.vscode/`、`.llm-wiki/backflow/`（避免递归归档）
-- 若有 `.agents-log`，默认不上传 `meta/` 目录
+- `workspace/agents-log/meta/` 默认不纳入 archive/upload；只有当前任务确实需要详细取证或外溢材料时才保留，并在 `Notes` 说明原因
 
 如果被排除的材料有证据价值，在 `<task-slug>.md` 的 `Notes` 中写清原路径、原因、摘要和可访问位置；不要把大文件硬塞进上传。
 
@@ -81,6 +81,7 @@ workspace 判断：
 - 如果没有找到相关 `.agents-log` summary：触发或使用 `session-extractor` skill，以 structured 模式导出当前会话到 archive 的 `workspace/agents-log/`。
 - fallback 成功后，后续仍按 `workspace/agents-log/summary/<timestamp>/` 记录和汇报；只在 `Notes` 中标注它由 `session-extractor` 生成。
 - 执行 `session-extractor` 时使用 structured 模式，并把输出根目录设为 `workspace/agents-log/`。
+- fallback 生成后，默认只保留 `workspace/agents-log/summary/`；移除或排除 `workspace/agents-log/meta/`，除非当前任务确实需要详细取证或外溢材料。
 - 如果 `session-extractor` 失败，不阻塞本地 archive；在顶层 `<task-slug>.md` 的 `Notes` 和最终汇报里写清失败原因。
 
 推荐落盘形态：
@@ -97,7 +98,6 @@ workspace 判断：
     │               └── main/
     │                   ├── summary.md
     │                   └── usage.json
-    └── meta/                     # fallback 生成且需要保留详细/外溢材料时可存在
 ```
 
 
@@ -119,7 +119,7 @@ workspace 判断：
 └── workspace/              # 任务现场材料
     ├── progress.md         # 如有
     ├── wiki_usage.md       # 如有（query skill 写的页面使用记录）
-    ├── agents-log/         # 原 .agents-log summary；或 session-extractor fallback 生成的同形态目录
+    ├── agents-log/         # .agents-log summary；或 session-extractor fallback 生成的同形态目录
     └── ...
 ```
 

@@ -306,11 +306,14 @@ class SyncAdaptersTests(unittest.TestCase):
                 self.assertIn("archive 的 `workspace/agents-log/`", text)
                 self.assertIn("同形态", text)
                 self.assertIn("执行 `session-extractor` 时使用 structured 模式", text)
+                self.assertIn("默认只保留 `workspace/agents-log/summary/`", text)
+                self.assertIn("`workspace/agents-log/meta/` 默认不纳入 archive/upload", text)
                 self.assertNotIn("workspace/session-extractor/", text)
                 self.assertNotIn("Session Extractor Trace", text)
                 self.assertNotIn("不要在 backflow 中复写", text)
                 self.assertNotIn("定位、解析或渲染逻辑", text)
                 self.assertNotIn("原逻辑", text)
+                self.assertNotIn("fallback 生成且需要保留详细/外溢材料时可存在", text)
                 for snippet in forbidden:
                     self.assertNotIn(snippet, text)
 
