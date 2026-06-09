@@ -144,6 +144,7 @@ mcp_url: https://wiki.andykong.top/mcp
 知识检索一律通过 MCP 工具：cann-infer-wiki-cloud wiki_search、cann-infer-wiki-cloud wiki_get_page。
 需要引用图片时，使用 wiki_get_page 返回 content 中的 /assets HTTP URL 或 assets manifest。
 
+progress.md 是 agent 工作记录文件；若不存在，请在当前任务的工作目录创建，并在工作过程中记录操作。
 每次使用 llm-wiki-cloud-query 后，必须把页面级记录写到当前阶段 progress.md 同级的 wiki_usage.md，并把查询摘要同步写入 progress.md。
 <!-- LLM-WIKI:END -->
 ```

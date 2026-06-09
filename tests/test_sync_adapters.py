@@ -48,6 +48,7 @@ class SourceLayoutTests(unittest.TestCase):
         self.assertIn("{{query_skill_name}}", text)
         self.assertIn("{{wiki_search_tool}}", text)
         self.assertIn("{{wiki_get_page_tool}}", text)
+        self.assertIn("progress.md 是 agent 工作记录文件", text)
 
 
 class TemplateInventoryTests(unittest.TestCase):
@@ -427,6 +428,7 @@ class SyncAdaptersTests(unittest.TestCase):
                 self.assertIn("<!-- LLM-WIKI:BEGIN -->", text)
                 self.assertIn("<!-- LLM-WIKI:END -->", text)
                 self.assertIn("写入或更新这段 block", text)
+                self.assertIn("progress.md 是 agent 工作记录文件", text)
                 self.assertNotIn("发布时预渲染", text)
                 self.assertNotIn("共享 pin block 必须使用这些 slot", text)
 
