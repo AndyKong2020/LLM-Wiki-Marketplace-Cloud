@@ -397,6 +397,14 @@ class SyncAdaptersTests(unittest.TestCase):
         codex_mount = (temp_root / "plugins/llm-wiki-client-codex/skills/llm-wiki-cloud-mount/SKILL.md").read_text(encoding="utf-8")
         opencode_mount = (temp_root / "plugins/llm-wiki-client-opencode/skills/llm-wiki-cloud-mount/SKILL.md").read_text(encoding="utf-8")
 
+        for text in [claude_mount, codex_mount, opencode_mount]:
+            self.assertIn("version_manifest_status=ok", text)
+            self.assertIn("version_manifest_json_begin", text)
+            self.assertIn("读取 `agent` 字段", text)
+            self.assertIn("优先发送 manifest 的 `user` 字段", text)
+            self.assertNotIn("sys.exit(20)", text)
+            self.assertNotIn("print(\"version_check=update_required\")", text)
+
         self.assertIn("/plugin marketplace update llm-wiki-cloud", claude_mount)
         self.assertIn("/plugin update llm-wiki-client@llm-wiki-cloud", claude_mount)
         self.assertIn("plugin_version_current 低于 1.2.0", claude_mount)

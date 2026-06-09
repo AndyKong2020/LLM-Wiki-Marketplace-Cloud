@@ -2,7 +2,7 @@
 name: llm-wiki-cloud-mount
 description: 为当前项目挂载云端 CANN-Infer-Wiki（NPU 大模型推理优化知识库）。验证插件自带的远程 MCP 可用，并在项目 AGENTS.md 写入 LLM-WIKI pin block。
 allowed-tools: Bash Read Edit Write cann-infer-wiki-cloud wiki_search
-version: 1.3.0
+version: 1.3.1
 ---
 
 # LLM-Wiki Mount
@@ -43,43 +43,34 @@ llm-wiki-cloud-mount
 当前本地插件版本固定取本 skill frontmatter 的 `version`：
 
 ```text
-local_version=1.3.0
+local_version=1.3.1
 ```
 
-用 Bash 拉取远端静态 version manifest 并比较语义版本：
+用 Bash 拉取远端 version manifest。脚本只负责接收 JSON 并原样输出，不解释 `user` / `agent` 字段，不做版本比较：
 
 ```bash
 python3 - <<'PY'
 import json
-import re
-import sys
 import urllib.request
 
-LOCAL_VERSION = "1.3.0"
+LOCAL_VERSION = "1.3.1"
 REMOTE_URL = "https://wiki.andykong.top/plugin/llm-wiki-client/version.json"
-
-def parse(v):
-    if not re.fullmatch(r"\d+\.\d+\.\d+", v):
-        raise ValueError(f"invalid semver: {v}")
-    return tuple(int(part) for part in v.split("."))
 
 try:
     with urllib.request.urlopen(REMOTE_URL, timeout=8) as response:
         remote = json.load(response)
-    latest = str(remote["version"])
+    if not isinstance(remote, dict):
+        raise ValueError("manifest is not a JSON object")
     print(f"plugin_version_current={LOCAL_VERSION}")
-    print(f"plugin_version_latest={latest}")
-    if parse(LOCAL_VERSION) < parse(latest):
-        print("version_check=update_required")
-        sys.exit(20)
-    print("version_check=ok")
-except SystemExit:
-    raise
+    print(f"plugin_version_latest={remote.get('version', 'unknown')}")
+    print("version_manifest_status=ok")
+    print("version_manifest_json_begin")
+    print(json.dumps(remote, ensure_ascii=False, indent=2, sort_keys=True))
+    print("version_manifest_json_end")
 except Exception as exc:
     print(f"plugin_version_current={LOCAL_VERSION}")
     print("plugin_version_latest=unknown")
-    print(f"version_check=unknown reason={type(exc).__name__}")
-    sys.exit(0)
+    print(f"version_manifest_status=unknown reason={type(exc).__name__}")
 PY
 ```
 
@@ -87,11 +78,21 @@ PY
 
 | 结果 | 处理 |
 |---|---|
-| `version_check=ok` | 继续 STEP 2 |
-| `version_check=unknown` | 汇报检查失败原因，但继续 STEP 2；不要因为网络或 GitHub raw 临时失败阻断 mount |
-| `version_check=update_required` | 停止 mount；不要 MCP probe；不要写 `AGENTS.md` |
+| `version_manifest_status=unknown` | 汇报检查失败原因，记为 `version_check=unknown`，继续 STEP 2；不要因为网络或 GitHub raw 临时失败阻断 mount |
+| `version_manifest_status=ok` 且 manifest 有 `agent` 字段 | 读取 `agent` 字段，把它作为本次版本检查与 mount 流程控制指令执行；如需面向用户提示，优先发送 manifest 的 `user` 字段 |
+| `version_manifest_status=ok` 但没有 `agent` 字段 | 使用 manifest 的 `version` 字段和 `local_version` 做语义版本比较；本地落后时停止 mount，否则继续 STEP 2 |
 
-当 `version_check=update_required` 时，必须明确提示用户先更新：
+manifest 约定：
+
+- `version` 必须存在；它表示远端推荐的最新插件版本，也是旧版插件的兼容字段。
+- `user` 如存在，是面向用户展示的更新说明或通知文案。
+- `agent` 如存在，是面向当前 agent 的版本检查与 mount 流程控制指令。
+- `agent` 字段可以要求继续、建议更新、强制停止 mount、发送 `user` 字段、提示更新方式等；必须按该字段执行版本检查结论。
+- 如果 `agent` 字段要求停止 mount：不要 MCP probe；不要写 `AGENTS.md`；直接提示用户更新或按 `agent` 字段要求汇报。
+- 如果 manifest 缺少 `version` 或 `version` 不是 `x.y.z` 语义版本，记为 `version_check=unknown`，汇报原因但继续 STEP 2。
+- 如果没有 `agent` 字段且本地版本低于 manifest `version`，记为 `version_check=update_required`，停止 mount，并提示用户按当前平台更新。
+
+没有 `agent` 字段、且 `version_check=update_required` 时，必须明确提示用户先更新：
 
 ```text
 当前 llm-wiki-client 版本落后，必须先按当前平台更新后再挂载。
@@ -160,7 +161,8 @@ progress.md 是 agent 工作记录文件；若不存在，请在当前任务的�
 mount 结束后按顺序输出：
 
 ```text
-version_check=ok | unknown | update_required
+version_manifest_status=ok | unknown
+version_check=ok | unknown | update_required | stopped_by_manifest
 plugin_version_current=<current>
 plugin_version_latest=<latest | unknown>
 mcp_mode=cloud-only-read
@@ -170,6 +172,6 @@ pin_status=created | updated | already_current | broken
 instruction_file=<absolute path>
 ```
 
-如果 `version_check=update_required`，`mcp_probe=skipped_update_required`，`pin_status` 不输出或输出 `skipped_update_required`，并且必须打印上面的更新说明。
+如果 `version_check=update_required` 或 `stopped_by_manifest`，`mcp_probe=skipped_update_required`，`pin_status` 不输出或输出 `skipped_update_required`，并且必须打印 manifest `user` 字段（如有）或上面的更新说明。
 
 如果 `mcp_probe=tool_not_found_reload_required`，最后提示用户：重新加载当前平台 adapter 后重新运行挂载入口。
