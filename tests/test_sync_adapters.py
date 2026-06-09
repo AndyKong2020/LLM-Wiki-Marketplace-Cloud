@@ -319,6 +319,26 @@ class SyncAdaptersTests(unittest.TestCase):
                 for snippet in forbidden:
                     self.assertNotIn(snippet, text)
 
+    def test_backflow_exports_git_evidence_without_dot_git(self):
+        temp_root = self.run_sync()
+        for platform in ["claude", "codex", "opencode"]:
+            rel = f"plugins/llm-wiki-client-{platform}/skills/llm-wiki-cloud-backflow/SKILL.md"
+            text = (temp_root / rel).read_text(encoding="utf-8")
+            with self.subTest(platform=platform):
+                self.assertIn("不要复制 `.git/` 目录", text)
+                self.assertIn("`workspace/git/`", text)
+                self.assertIn("`head.txt`", text)
+                self.assertIn("`status.txt`", text)
+                self.assertIn("`diff.patch`", text)
+                self.assertIn("`diff-cached.patch`", text)
+                self.assertIn("`recent-log.txt`", text)
+                self.assertIn("`git status --short --branch`", text)
+                self.assertIn("`git diff --no-ext-diff -- .`", text)
+                self.assertIn("`git diff --cached --no-ext-diff -- .`", text)
+                self.assertIn("`git log --oneline --decorate -n 20`", text)
+                self.assertIn("`.git/` 目录默认不纳入 archive/upload", text)
+                self.assertIn("如果 URL 含凭据、token 或私有入口，省略或改写后再归档", text)
+
     def test_embedded_session_extractor_tests_pass(self):
         result = subprocess.run(
             [
