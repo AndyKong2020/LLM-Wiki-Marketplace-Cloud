@@ -46,7 +46,7 @@ llm-wiki-cloud-mount
 local_version=1.3.1
 ```
 
-用 Bash 拉取远端 version manifest。脚本只负责接收 JSON 并原样输出，不解释 `user` / `agent` 字段，不做版本比较：
+用 Bash 拉取远端 version manifest，并输出本地版本、远端版本与完整 manifest：
 
 ```bash
 python3 - <<'PY'
@@ -74,25 +74,13 @@ except Exception as exc:
 PY
 ```
 
-处理规则：
+读取 manifest 后按顺序处理：
 
-| 结果 | 处理 |
-|---|---|
-| `version_manifest_status=unknown` | 汇报检查失败原因，记为 `version_check=unknown`，继续 STEP 2；不要因为网络或 GitHub raw 临时失败阻断 mount |
-| `version_manifest_status=ok` 且 manifest 有 `agent` 字段 | 读取 `agent` 字段，把它作为本次版本检查与 mount 流程控制指令执行；如需面向用户提示，优先发送 manifest 的 `user` 字段 |
-| `version_manifest_status=ok` 但没有 `agent` 字段 | 使用 manifest 的 `version` 字段和 `local_version` 做语义版本比较；本地落后时停止 mount，否则继续 STEP 2 |
+1. `version_manifest_status=unknown`：汇报检查失败原因，记为 `version_check=unknown`，继续 STEP 2；不要因为网络或 GitHub raw 临时失败阻断 mount。
+2. manifest 缺少 `version` 或 `agent`，或 `version` 不是 `x.y.z` 语义版本：记为 `version_check=unknown`，汇报原因，继续 STEP 2。
+3. manifest 有效时：读取 `agent` 字段并按其中指令执行版本检查与 mount 流程控制；需要展示更新说明时，优先发送 manifest 的 `user` 字段。如果 `agent` 要求停止 mount，记为 `version_check=stopped_by_manifest`，不要 MCP probe，不要写 `AGENTS.md`。
 
-manifest 约定：
-
-- `version` 必须存在；它表示远端推荐的最新插件版本，也是旧版插件的兼容字段。
-- `user` 如存在，是面向用户展示的更新说明或通知文案。
-- `agent` 如存在，是面向当前 agent 的版本检查与 mount 流程控制指令。
-- `agent` 字段可以要求继续、建议更新、强制停止 mount、发送 `user` 字段、提示更新方式等；必须按该字段执行版本检查结论。
-- 如果 `agent` 字段要求停止 mount：不要 MCP probe；不要写 `AGENTS.md`；直接提示用户更新或按 `agent` 字段要求汇报。
-- 如果 manifest 缺少 `version` 或 `version` 不是 `x.y.z` 语义版本，记为 `version_check=unknown`，汇报原因但继续 STEP 2。
-- 如果没有 `agent` 字段且本地版本低于 manifest `version`，记为 `version_check=update_required`，停止 mount，并提示用户按当前平台更新。
-
-没有 `agent` 字段、且 `version_check=update_required` 时，必须明确提示用户先更新：
+需要提示用户更新时，使用 manifest 的 `user` 字段和当前平台更新说明：
 
 ```text
 当前 llm-wiki-client 版本落后，必须先按当前平台更新后再挂载。
@@ -162,16 +150,16 @@ mount 结束后按顺序输出：
 
 ```text
 version_manifest_status=ok | unknown
-version_check=ok | unknown | update_required | stopped_by_manifest
+version_check=ok | unknown | stopped_by_manifest
 plugin_version_current=<current>
 plugin_version_latest=<latest | unknown>
 mcp_mode=cloud-only-read
 mcp_url=https://wiki.andykong.top/mcp
-mcp_probe=rpc_ok | tool_not_found_reload_required | failed | skipped_update_required
+mcp_probe=rpc_ok | tool_not_found_reload_required | failed | skipped_by_manifest
 pin_status=created | updated | already_current | broken
 instruction_file=<absolute path>
 ```
 
-如果 `version_check=update_required` 或 `stopped_by_manifest`，`mcp_probe=skipped_update_required`，`pin_status` 不输出或输出 `skipped_update_required`，并且必须打印 manifest `user` 字段（如有）或上面的更新说明。
+如果 `version_check=stopped_by_manifest`，`mcp_probe=skipped_by_manifest`，`pin_status` 不输出或输出 `skipped_by_manifest`，并且必须打印 manifest `user` 字段（如有）或上面的更新说明。
 
 如果 `mcp_probe=tool_not_found_reload_required`，最后提示用户：重新加载当前平台 adapter 后重新运行挂载入口。

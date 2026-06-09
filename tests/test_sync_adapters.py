@@ -404,6 +404,13 @@ class SyncAdaptersTests(unittest.TestCase):
             self.assertIn("优先发送 manifest 的 `user` 字段", text)
             self.assertNotIn("sys.exit(20)", text)
             self.assertNotIn("print(\"version_check=update_required\")", text)
+            self.assertNotIn("脚本只负责接收 JSON", text)
+            self.assertNotIn("不解释 `user` / `agent` 字段", text)
+            self.assertNotIn("manifest 没有 `agent`：比较", text)
+            self.assertNotIn("本地版本低于远端时", text)
+            self.assertNotIn("version_check=ok | unknown | update_required", text)
+            self.assertIn("version_check=ok | unknown | stopped_by_manifest", text)
+            self.assertIn("mcp_probe=rpc_ok | tool_not_found_reload_required | failed | skipped_by_manifest", text)
 
         self.assertIn("/plugin marketplace update llm-wiki-cloud", claude_mount)
         self.assertIn("/plugin update llm-wiki-client@llm-wiki-cloud", claude_mount)
