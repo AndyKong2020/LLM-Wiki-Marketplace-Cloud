@@ -54,7 +54,7 @@ workspace 判断：
 - `progress.md` 或等价任务记录
 - `wiki_usage.md`
 - 任务相关源码、配置、小型脚本、README、命令记录
-- git 证据快照（status、diff、HEAD、recent log），作为普通 workspace 材料保存
+- 任务中实际使用过 git、或 git 状态影响结论时，按需保存 git 证据快照，作为普通 workspace 材料
 - 小型 benchmark 摘要、profiling 摘要、结论截图或文本报告
 - 与当前任务相关的 `.agents-log/summary/<timestamp>/` 目录（如果存在）
 - 如果没有相关 `.agents-log` summary，可用 `session-extractor` skill 补齐同形态的 agent log summary
@@ -65,7 +65,7 @@ workspace 判断：
 - 构建产物、依赖目录、缓存目录、虚拟环境
 - 大体积二进制文件
 - credentials、tokens、keys、`.env*`
-- `.git/`、`.idea/`、`.vscode/`、`.llm-wiki/backflow/`（不要复制 `.git/` 目录；git 证据按第 1.4 节导出成小文本/patch）
+- `.git/`、`.idea/`、`.vscode/`、`.llm-wiki/backflow/`（不要复制 `.git/` 目录；任务需要 git 证据时按第 1.4 节导出成小文本/patch）
 - `workspace/agents-log/meta/` 默认不纳入 archive/upload；只有当前任务确实需要详细取证或外溢材料时才保留，并在 `Notes` 说明原因
 
 如果被排除的材料有证据价值，在 `<task-slug>.md` 的 `Notes` 中写清原路径、原因、摘要和可访问位置；不要把大文件硬塞进上传。
@@ -120,19 +120,19 @@ workspace 判断：
     ├── progress.md         # 如有
     ├── wiki_usage.md       # 如有（query skill 写的页面使用记录）
     ├── agents-log/         # .agents-log summary；或 session-extractor fallback 生成的同形态目录
-    ├── git/                # 如有：导出的 git 证据快照，不包含 .git/
+    ├── git/                # 如有：任务中使用 git 后按需导出的证据快照，不包含 .git/
     └── ...
 ```
 
 - 先创建 `workspace/`，把所有相关的任务材料复制进去（保留必要的子目录结构），默认直接复制任务目录，并排除大文件。
-- 如果 workspace 是 git 仓库，不复制 `.git/` 目录；按需创建 `workspace/git/` 并保存小型证据文件：
-  - `head.txt`：`git rev-parse --show-toplevel`、`git branch --show-current`、`git rev-parse HEAD`
-  - `status.txt`：`git status --short --branch`
-  - `diff.patch`：`git diff --no-ext-diff -- .`
-  - `diff-cached.patch`：`git diff --cached --no-ext-diff -- .`
-  - `recent-log.txt`：`git log --oneline --decorate -n 20`
-  - 如需记录 remote，只保存脱敏后的 `remotes.txt`；如果 URL 含凭据、token 或私有入口，省略或改写后再归档
-- 是否保存 diff、保存到哪里，根据当前任务判断。
+- 只有任务中实际使用过 git、或 git 状态/提交/patch 是证据链的一部分时，才创建 `workspace/git/`；不要因为 workspace 是 git 仓库就自动导出 git 证据。
+- 不复制 `.git/` 目录；只保存和当前任务相关的小型证据文件，下面是候选项，不要求全部保存：
+  - `head.txt`：需要标识仓库根目录、当前分支或当前 HEAD 时，保存 `git rev-parse --show-toplevel`、`git branch --show-current`、`git rev-parse HEAD`
+  - `status.txt`：需要说明 dirty state、分支状态或未跟踪文件时，保存 `git status --short --branch`
+  - `diff.patch`：任务涉及未暂存工作区改动时，保存 `git diff --no-ext-diff -- .`
+  - `diff-cached.patch`：任务涉及已暂存改动时，保存 `git diff --cached --no-ext-diff -- .`
+  - `recent-log.txt`：任务依赖最近提交或历史关系时，保存 `git log --oneline --decorate -n 20`
+  - `remotes.txt`：只有 remote 身份对任务有证据价值时才保存；如果 URL 含凭据、token 或私有入口，省略或改写后再归档
 - 如有相关 agents-log summary，按第 1.3 节复制到 `workspace/agents-log/summary/`；没有时按第 1.3 节使用 `session-extractor` fallback。
 - **不要**在归档目录里放真正的二进制（模型权重、profiler raw、大压缩包）。
 
@@ -166,7 +166,7 @@ tags: [<场景/优化阶段/相关模型族等关键 tag>]
 
 ## Git Evidence
 
-`workspace/git/status.txt`、`workspace/git/diff.patch`、`workspace/git/diff-cached.patch`、`workspace/git/recent-log.txt` 路径（如有）
+实际保存的 `workspace/git/` 证据文件路径（如有）
 
 ## Agents Log Summary
 
@@ -180,7 +180,7 @@ backflow/<task-slug>/
 └── workspace/
     ├── progress.md
     ├── wiki_usage.md
-    ├── git/
+    ├── git/              # 如有，按需保存；下列文件不要求全部存在
     │   ├── head.txt
     │   ├── status.txt
     │   ├── diff.patch
@@ -199,7 +199,7 @@ backflow/<task-slug>/
 
 - 未归档的大文件、raw profiler、数据集、模型权重等在这里说明原路径、排除原因和可访问位置
 - 没有 `progress.md` 或任务轨迹不完整时，在这里说明证据链状况
-- 记录本次纳入了哪些 git 证据文件；如果 `.git/` 未归档，不需要解释，只有需要但无法导出 git 证据时才说明原因
+- 如果任务中使用了 git，记录本次实际纳入了哪些 git 证据文件；如果 `.git/` 未归档，不需要解释，只有需要但无法导出 git 证据时才说明原因
 - 记录本次纳入了哪些 `.agents-log/summary/<timestamp>/`；如果未找到相关 summary，说明是否使用了 `session-extractor` fallback 以及输出路径或失败原因
 
 ````
@@ -213,7 +213,7 @@ backflow/<task-slug>/
 - 本地 archive 路径 `.llm-wiki/backflow/<task-slug>/`
 - 顶层 `<task-slug>.md` 一句话总结 + 文件大小（不复制全文）
 - 整个目录的文件清单（`find . -type f` 输出）+ 文件总数 + 总字节
-- 纳入了哪些 git 证据文件；`.git/` 目录默认不纳入 archive/upload
+- 如果任务中使用了 git，纳入了哪些 git 证据文件；`.git/` 目录默认不纳入 archive/upload
 - 纳入了哪些 `.agents-log/summary/<timestamp>/`；如果没有找到相关 summary，说明是否使用了 `session-extractor` fallback 以及输出路径或失败原因
 - 排除了哪些重要文件以及原因
 - 即将作为上传 `slug` 的值
