@@ -84,8 +84,7 @@ class TemplateInventoryTests(unittest.TestCase):
     def test_skill_templates_have_no_todo_markers(self):
         for path in sorted((ROOT / "src/skills").glob("*/SKILL.md.tmpl")):
             text = path.read_text(encoding="utf-8")
-            allowed = "TODO:链接下探" if path.name == "SKILL.md.tmpl" and path.parent.name == "llm-wiki-cloud-query" else ""
-            self.assertNotIn("TODO", text.replace(allowed, ""), path.relative_to(ROOT))
+            self.assertNotIn("TODO", text, path.relative_to(ROOT))
 
     def test_required_templates_exist(self):
         required = [
@@ -287,6 +286,24 @@ class SyncAdaptersTests(unittest.TestCase):
                 self.assertTrue((skill_root / "scripts/extract.py").exists())
                 self.assertTrue((skill_root / "scripts/sessionlog/render.py").exists())
                 self.assertFalse((skill_root / "scripts/tests").exists())
+
+    def test_query_skill_documents_wiki_link_descent(self):
+        temp_root = self.run_sync()
+        for platform in ["claude", "codex", "opencode"]:
+            rel = f"plugins/llm-wiki-client-{platform}/skills/llm-wiki-cloud-query/SKILL.md"
+            text = (temp_root / rel).read_text(encoding="utf-8")
+            with self.subTest(platform=platform):
+                self.assertIn("### 3.3 wiki_get_page", text)
+                self.assertIn("`ids` 有两个来源", text)
+                self.assertLess(text.index("返回 `{pages"), text.index("`ids` 有两个来源"))
+                self.assertIn("从 `wiki_search` 返回的 `results[].id` 直接取", text)
+                self.assertIn("从已读页面正文里的 wiki link 转换", text)
+                self.assertIn('page_id = content_path.replace("/", "_").replace(".", "_")', text)
+                self.assertIn("wiki_static_cann-infer_models_deepseek-v3_2-exp_md", text)
+                self.assertIn("### 3.4 应用 + 记录", text)
+                self.assertNotIn("读 content 时按问题类别看不同段", text)
+                self.assertNotIn("### 3.4 页面链接下探", text)
+                self.assertNotIn("TODO:链接下探", text)
 
     def test_backflow_uses_session_extractor_only_as_fallback(self):
         temp_root = self.run_sync()

@@ -91,14 +91,21 @@ cann-infer-wiki-cloud wiki_get_page(
 - `frontmatter`：可能含 `source`（溯源）、`contradictions`（矛盾页 ID 列表）、`arch_support` 等
 - `errors`：取页失败的 ID（多半是 ID 拼写错或页已归档）。跳过，**不重试**
 
-读 content 时按问题类别看不同段：
+`ids` 有两个来源：
 
-- **策略类**：`## Solution` / `## When applicable` / `## Trade-offs`
-- **debug 类**：`## Problem` / `## Symptom` / `## Root Cause` / `## Verification`
-- **事实类**：API 名、参数表、约束条件
-- 若 `frontmatter.contradictions` 非空：必读其中之一了解争议点（再次 `wiki_get_page`）
+1. 从 `wiki_search` 返回的 `results[].id` 直接取，选择感兴趣的页面 id。
+2. 从已读页面正文里的 wiki link 转换，可选取感兴趣的 wiki link 转换为页面 id。取 `[[target|alias]]` 的 `target`；Markdown 链接取目标路径；去掉 `#anchor` 和查询参数；没有 `.md` 后缀就补 `.md`，再按：
 
-TODO:链接下探
+```text
+page_id = content_path.replace("/", "_").replace(".", "_")
+```
+
+例如：
+
+```text
+[[wiki/static/cann-infer/models/deepseek-v3.2-exp|DeepSeek-V3.2-Exp]]
+=> wiki_static_cann-infer_models_deepseek-v3_2-exp_md
+```
 
 ### 3.4 应用 + 记录
 
