@@ -319,6 +319,7 @@ if ! http_code="$(
   curl -sS -X POST "$upload_url" \
     --config "$curl_config" \
     --form-string "slug=${task_slug}" \
+    --form-string "client_plugin_version={{version}}" \
     -F "package=@${pkg};type=application/gzip" \
     --output "$body_file" \
     --write-out "%{http_code}"

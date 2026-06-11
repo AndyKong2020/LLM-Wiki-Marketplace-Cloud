@@ -361,6 +361,18 @@ class SyncAdaptersTests(unittest.TestCase):
                 self.assertIn("如果 URL 含凭据、token 或私有入口，省略或改写后再归档", text)
                 self.assertNotIn("如果 workspace 是 git 仓库，不复制 `.git/` 目录；按需创建 `workspace/git/`", text)
 
+    def test_backflow_upload_sends_client_plugin_version(self):
+        temp_root = self.run_sync()
+        version = (temp_root / "VERSION").read_text(encoding="utf-8").strip()
+        for platform in ["claude", "codex", "opencode"]:
+            rel = f"plugins/llm-wiki-client-{platform}/skills/llm-wiki-cloud-backflow/SKILL.md"
+            text = (temp_root / rel).read_text(encoding="utf-8")
+            with self.subTest(platform=platform):
+                self.assertIn(
+                    f'--form-string "client_plugin_version={version}"',
+                    text,
+                )
+
     def test_embedded_session_extractor_tests_pass(self):
         result = subprocess.run(
             [

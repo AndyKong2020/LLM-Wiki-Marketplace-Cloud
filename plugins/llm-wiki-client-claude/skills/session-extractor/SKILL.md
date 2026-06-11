@@ -2,7 +2,7 @@
 name: session-extractor
 description: 把当前 agent 会话记录按需导出为 Markdown 到 .session-extractor/ 目录。当用户想保存、归档、快照当前会话，把对话/交互记录转成 markdown，生成 session log，或导出 transcript 时使用。支持 structured（默认，带 meta/summary 结构）与 flat（每 agent 一个大 md）两种形态、多次触发增量幂等、多 agent/subagent；跨 Claude Code / Codex / Opencode 三平台，自动判断当前客户端。
 allowed-tools: Bash Read Write
-version: 1.3.2
+version: 1.3.3
 ---
 
 # Session Extractor
