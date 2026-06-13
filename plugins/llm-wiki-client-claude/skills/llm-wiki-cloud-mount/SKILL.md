@@ -1,15 +1,15 @@
 ---
 name: llm-wiki-cloud-mount
-description: 为当前项目挂载云端 CANN-Infer-Wiki（NPU 大模型推理优化知识库）。验证插件自带的远程 MCP 可用，并在项目 CLAUDE.md 写入 LLM-WIKI pin block。
+description: 为当前项目挂载云端 LLM-Wiki（NPU 大模型优化知识库）。验证插件自带的远程 MCP 可用，并在项目 CLAUDE.md 写入 LLM-WIKI pin block。
 allowed-tools: Bash Read Edit Write mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_search
-version: 1.3.3
+version: 1.3.4
 ---
 
 # LLM-Wiki Mount
 
 ## 1. 概述
 
-`llm-wiki-cloud-mount` 把云端 CANN-Infer-Wiki 作为当前 Claude Code 项目的知识入口。
+`llm-wiki-cloud-mount` 把云端 LLM-Wiki 作为当前 Claude Code 项目的知识入口。
 
 MCP 客户端配置由插件 root 的 `.mcp.json` 自带，安装插件后自动注册：
 
@@ -43,7 +43,7 @@ llm-wiki-cloud-mount
 当前本地插件版本固定取本 skill frontmatter 的 `version`：
 
 ```text
-local_version=1.3.3
+local_version=1.3.4
 ```
 
 用 Bash 拉取远端 version manifest，并输出本地版本、远端版本与完整 manifest：
@@ -53,7 +53,7 @@ python3 - <<'PY'
 import json
 import urllib.request
 
-LOCAL_VERSION = "1.3.3"
+LOCAL_VERSION = "1.3.4"
 REMOTE_URL = "https://wiki.andykong.top/plugin/llm-wiki-client/version.json"
 
 try:
@@ -127,12 +127,12 @@ mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_search(query="mount prob
 
 ```md
 <!-- LLM-WIKI:BEGIN -->
-本项目已挂载云端 CANN-Infer-Wiki（NPU 大模型推理优化知识库）。
+本项目已挂载云端 LLM-Wiki（NPU 大模型优化知识库）。
 mcp_url: https://wiki.andykong.top/mcp
 
 涉及下列任务时必须使用 llm-wiki-cloud-query skill：
-- 大模型推理优化任务：model / kernel / parallelism / module / framework / technique / quantization / platform
-  （模型族 qwen3-moe / deepseek-r1 / hunyuan-* / longcat-* / kimi-k2 等；算子 fia / mla / dia / sparse-flash-attention 等；并行 tp / dp / cp / ep / zigzag-cp / ulysses 等；框架 sglang / torchair / pypto / ascendc / atb / catlass / tilelang 等；技术 npu-graph-mode / weight-prefetch / superkernel / afd 等；量化 w8a8c8 / w4a8c8 / mxfp8 / fp8-attention 等；平台 atlas-a3 / ascend910 等）
+- NPU 大模型优化任务，覆盖四个 domain：cann-infer（推理）、cann-train（训练）、cann-spatial（空间智能）、cann-embodied（具身智能）
+  （模型族 qwen3-moe / deepseek-r1 / hunyuan-* / longcat-* / kimi-k2 等；算子 fia / mla / dia / sparse-flash-attention / 3dgs 渲染算子等；并行 tp / dp / cp / ep / fsdp / zigzag-cp / ulysses 等；框架 sglang / torchair / pypto / ascendc / atb / catlass / tilelang / torchtitan / verl / mindspeed / vllm-ascend 等；技术 npu-graph-mode / weight-prefetch / superkernel / afd / autofuse / rollout-rebalance 等；量化 w8a8c8 / w4a8c8 / mxfp8 / hif8 等；平台 atlas-a2 / atlas-a3 / ascend910 等）
 - 进入新优化阶段、做方案分析、策略选择、debug 调试、性能/精度回归归因时
 
 涉及 subagent 时，必须将 llm-wiki-cloud-query skill 的使用说明注入到拉起 subagent 的 prompt 中。

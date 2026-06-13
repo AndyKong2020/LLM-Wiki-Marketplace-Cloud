@@ -2,7 +2,7 @@
 name: llm-wiki-cloud-backflow
 description: 任务结束后使用。无参数触发，由 agent 判断 task slug 和 workspace，在本地归档真实任务轨迹；如配置 LLM_WIKI_UPLOAD_TOKEN 则通过私有 HTTP 入口上传。
 allowed-tools: Bash Read Write
-version: 1.3.3
+version: 1.3.4
 ---
 
 # LLM-Wiki Backflow
@@ -145,7 +145,7 @@ workspace 判断：
 ````md
 ---
 title: "<display title>"
-domain: cann-infer
+domain: <cann-infer | cann-train | cann-spatial | cann-embodied>
 created_at: <YYYY-MM-DD>
 updated_at: <YYYY-MM-DD>
 tags: [<场景/优化阶段/相关模型族等关键 tag>]
@@ -319,7 +319,7 @@ if ! http_code="$(
   curl -sS -X POST "$upload_url" \
     --config "$curl_config" \
     --form-string "slug=${task_slug}" \
-    --form-string "client_plugin_version=1.3.3" \
+    --form-string "client_plugin_version=1.3.4" \
     -F "package=@${pkg};type=application/gzip" \
     --output "$body_file" \
     --write-out "%{http_code}"

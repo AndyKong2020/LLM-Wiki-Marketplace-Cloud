@@ -1,7 +1,7 @@
 {
   "name": "llm-wiki-cloud",
   "interface": {
-    "displayName": "LLM Wiki Cloud"
+    "displayName": "LLM-Wiki Cloud"
   },
   "plugins": [
     {

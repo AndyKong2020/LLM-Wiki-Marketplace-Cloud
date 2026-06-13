@@ -1,15 +1,15 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "llm-wiki-cloud",
-  "description": "CANN-Infer-Wiki（NPU 大模型推理优化知识库）的 Claude Code 云端只读插件市场，提供 MCP 挂载和查询能力。",
+  "description": "LLM-Wiki（NPU 大模型优化知识库）的 Claude Code 云端只读插件市场，提供 MCP 挂载和查询能力。",
   "owner": {
     "name": "AndyKong"
   },
   "plugins": [
     {
       "name": "llm-wiki-client",
-      "description": "在 Claude Code 中挂载并查询云端只读 CANN-Infer-Wiki，保留任务回流归档流程。",
-      "version": "1.3.3",
+      "description": "在 Claude Code 中挂载并查询云端只读 LLM-Wiki，保留任务回流归档流程。",
+      "version": "1.3.4",
       "author": {
         "name": "AndyKong"
       },
@@ -19,7 +19,7 @@
       "category": "development",
       "keywords": [
         "llm-wiki",
-        "cann-infer-wiki",
+        "npu-optimization",
         "npu",
         "mcp",
         "backflow",

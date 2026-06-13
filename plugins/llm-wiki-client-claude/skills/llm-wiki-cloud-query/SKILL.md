@@ -1,8 +1,8 @@
 ---
 name: llm-wiki-cloud-query
-description: 查询和运行时消费已挂载的 CANN-Infer-Wiki（通过 MCP）。进入新的 LLM/NPU 推理优化阶段、做方案分析、策略选择、debug 调试、性能/精度回归分析；涉及具体 model / kernel / parallelism / module / framework / technique / quantization / platform 知识、或动态层任务回流型经验时使用。
+description: 查询和运行时消费已挂载的 LLM-Wiki（通过 MCP）。进入新的 NPU 大模型优化阶段、做方案分析、策略选择、debug 调试、性能/精度回归分析；涉及推理、训练、空间智能、具身智能的 model / kernel / parallelism / module / framework / technique / quantization / platform / recipe / algorithm 知识，或动态层任务回流型经验时使用。
 allowed-tools: Bash Read Edit Write mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_search mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_get_page
-version: 1.3.3
+version: 1.3.4
 ---
 
 # LLM-Wiki Query
@@ -16,7 +16,8 @@ version: 1.3.3
 - 进入新的优化阶段：bringup / profiling / kernel tuning / 并行策略调整 / 显存优化 / 回归定位
 - 做方案分析、策略选择、实现路线判断
 - debug 调试、性能或精度异常排查、错误模式归因
-- 涉及具体模型族（qwen3-moe / deepseek-r1 / hunyuan-* / longcat-* / kimi-k2 等）、算子（fia / mla / dia / sparse-flash-attention 等）、并行策略（tp / dp / cp / ep / zigzag-cp / ulysses 等）、推理框架（sglang / torchair / pypto / ascendc / atb 等）、优化技术（npu-graph-mode / weight-prefetch / superkernel 等）、量化（w8a8c8 / w4a8c8 / mxfp8 等）、硬件平台（atlas-a3 / ascend910）
+- 涉及四个 domain 任一知识：`cann-infer`（推理）、`cann-train`（训练）、`cann-spatial`（空间智能）、`cann-embodied`（具身智能）
+- 涉及具体模型族（qwen3-moe / deepseek-r1 / hunyuan-* / longcat-* / kimi-k2 等）、算子（fia / mla / dia / sparse-flash-attention / 3dgs 渲染算子等）、并行策略（tp / dp / cp / ep / fsdp / zigzag-cp / ulysses 等）、框架（sglang / torchair / pypto / ascendc / atb / torchtitan / verl / mindspeed / vllm-ascend 等）、优化技术（npu-graph-mode / weight-prefetch / superkernel / autofuse / rollout-rebalance 等）、量化（w8a8c8 / w4a8c8 / mxfp8 / hif8 等）、硬件平台（atlas-a2 / atlas-a3 / ascend910）
 - 任务初期判断"是否有 wiki 经验可复用"
 - subagent 接到任务后，先判断要不要查 wiki
 
@@ -42,7 +43,7 @@ subagent 使用本 skill 时与主 agent 共用同一份 `wiki_usage.md`，位�
 把当前问题压缩成一段话：
 
 - 用具体的算子/模型族/技术名（`npu_fused_infer_attention_score` / `Qwen3` / `npu-graph-mode`），不要泛泛说"attention 加速"
-- 包含场景关键修饰：硬件平台 / 精度 / 并行配置 / 阶段（prefill/decode）
+- 包含场景关键修饰：硬件平台 / 精度 / 并行配置 / 阶段（prefill / decode / pretrain / SFT / RL / 3D reconstruction / embodied policy）
 - 短：一般 ≤100 字，不堆长句
 
 示例：
@@ -52,17 +53,30 @@ subagent 使用本 skill 时与主 agent 共用同一份 `wiki_usage.md`，位�
 | "Qwen3-MoE 怎么调优？" | `Qwen3-MoE Atlas A3 BF16 attention TP MoE EP 切分` |
 | "decode 慢，看不出哪儿" | `decode 时延高 attention 与 router AllGather 归因` |
 | "MLA 和 FIA 怎么选" | `MLA-Prolog 与 npu_fused_infer_attention_score 适用条件对比` |
+| "Qwen3 RL 训练 rollout 慢" | `Qwen3 RL rollout vLLM-Ascend SAM Rebalance Atlas A3` |
+| "3DGS 渲染算子怎么优化" | `3D Gaussian Splatting AscendC 渲染算子 alpha blending` |
 
-仅在你**明确知道**问题就限定在某一类知识时才加 `type` 或 `tags` 过滤：
+`domain` 用于限定任务所属知识领域。任务领域明确时可以加；任务跨领域或领域不明确时不加。
 
 ```text
-wiki_search(query="...", type="kernel", limit=5)
-wiki_search(query="...", tags=["fia", "decode"], limit=5)
+wiki_search(query="...", domain="cann-infer", limit=5)
+wiki_search(query="...", domain="cann-train", limit=5)
+wiki_search(query="...", domain="cann-spatial", limit=5)
+wiki_search(query="...", domain="cann-embodied", limit=5)
 ```
 
-`type` 取值：`model / kernel / parallelism / module / framework / technique / quantization / platform`，留空覆盖动态层。多个 `tags` 是交集。
+四个 domain：`cann-infer` / `cann-train` / `cann-spatial` / `cann-embodied`。
 
-否则**不加过滤**——server 端 retriever 跨类型搜往往更稳。
+`tags` 用于限定已经明确的机制、阶段、硬件、模型族或框架关键词；多个 tags 命中任一即可。初次检索不建议加 `tags`；只有需要二次收窄且标签非常确定时才加，避免把相关页面提前滤掉。
+
+```text
+wiki_search(query="...", tags=["fia", "decode"], limit=5)
+wiki_search(query="...", tags=["rl", "rollout"], limit=5)
+wiki_search(query="...", tags=["3dgs", "rendering"], limit=5)
+wiki_search(query="...", tags=["embodied", "vla"], limit=5)
+```
+
+先把模型、阶段、硬件、算法、框架等限定词写进 query 文本；任务领域明确时再加 `domain`，需要二次收窄且标签非常确定时才加 `tags`。
 
 ### 3.2 wiki_search
 
@@ -70,18 +84,18 @@ wiki_search(query="...", tags=["fia", "decode"], limit=5)
 mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_search(query="<上一节拟好的 query>", limit=5)
 ```
 
-返回 `{results: [{id, summary, tags, score, qValue}, ...], total}`。这就是 server 已经排好序的 topK，**直接用**：
+返回 `{results: [{id, summary, tags, score, qValue}, ...], total}`。这就是 server 已经按相关性排好序的 topK（由 `limit` 决定），**直接用**：
 
-- 看 top-1/top-2 的 `summary` 决定下一步要不要取正文（覆盖问题就取，明显不沾就重写一条 query）
-- 取候选页面 ID 进入 3.3
+- 看返回结果中相关候选的 `summary`，决定下一步要不要取正文（覆盖问题就取，整体明显不沾就重写一条 query）
+- 取相关候选页面 ID 进入 3.3
 
-如果 top-1 的 summary 跟问题完全不沾边（说明 query 没写好），**重写 query** 重新调一次；连续多次都不沾边就在 progress.md 记"wiki 暂无相关知识"，停止本次查询。
+如果返回的 topK summary 整体跟问题完全不沾边（说明 query 没写好），**重写 query** 重新调一次；连续多次都不沾边就在 progress.md 记"wiki 暂无相关知识"，停止本次查询。
 
 ### 3.3 wiki_get_page
 
 ```text
 mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_get_page(
-    ids=["wiki_static_cann-infer_models_qwen3-moe_md", ...]
+    ids=["wiki_static_cann-infer_models_qwen3-moe_md", "wiki_static_cann-train_recipes_qwen3-rl_md", ...]
 )
 ```
 
@@ -94,7 +108,7 @@ mcp__plugin_llm-wiki-client_cann-infer-wiki-cloud__wiki_get_page(
 `ids` 有两个来源：
 
 1. 从 `wiki_search` 返回的 `results[].id` 直接取，选择感兴趣的页面 id。
-2. 从已读页面正文里的 wiki link 转换，可选取感兴趣的 wiki link 转换为页面 id。取 `[[target|alias]]` 的 `target`；Markdown 链接取目标路径；去掉 `#anchor` 和查询参数；没有 `.md` 后缀就补 `.md`，再按：
+2. 从已读页面正文里的 wiki link 转换，可选取感兴趣的 wiki/source link 转换为页面 id。取 `[[target|alias]]` 的 `target`；Markdown 链接取目标路径；去掉 `#anchor` 和查询参数；没有 `.md` 后缀就补 `.md`，再按：
 
 ```text
 page_id = content_path.replace("/", "_").replace(".", "_")
@@ -105,7 +119,15 @@ page_id = content_path.replace("/", "_").replace(".", "_")
 ```text
 [[wiki/static/cann-infer/models/deepseek-v3.2-exp|DeepSeek-V3.2-Exp]]
 => wiki_static_cann-infer_models_deepseek-v3_2-exp_md
+
+[[wiki/static/cann-train/recipes/qwen3-rl]]
+=> wiki_static_cann-train_recipes_qwen3-rl_md
+
+[[sources/repos/official/cann-recipes-spatial-intelligence]]
+=> sources_repos_official_cann-recipes-spatial-intelligence_md
 ```
+
+读到 `[[sources/...]]`，需要 raw source 证据或核对原始上下文时，可按上面的规则转成 ID 后用 `wiki_get_page` 显式下探。
 
 ### 3.4 应用 + 记录
 
@@ -125,7 +147,7 @@ page_id = content_path.replace("/", "_").replace(".", "_")
 **格式**：每个使用过的页面一个一级标题，标题直接用 MCP ID。
 
 ```md
-# wiki_static_cann-infer_models_qwen3-moe_md
+# wiki_static_cann-train_recipes_qwen3-rl_md
 
 ## 原因
 为什么读取这个页面（当前阶段在判断什么、出于哪条线索查到这页）
@@ -139,7 +161,7 @@ page_id = content_path.replace("/", "_").replace(".", "_")
 ## 备注
 保留限制、误导点、是否要继续使用、与其它页的关系、页面需要修正的点等
 
-# wiki_dynamic_cann-infer_<slug>_md
+# wiki_dynamic_cann-train_<slug>_md
 
 ...
 ```
@@ -156,7 +178,7 @@ page_id = content_path.replace("/", "_").replace(".", "_")
 每次使用 wiki 后，在当前阶段 `progress.md` 的小节下追加一条 bullet：
 
 ```md
-- 查阅：`wiki_static_cann-infer_models_qwen3-moe_md`、`wiki_static_cann-infer_kernels_fused-infer-attention-score_md`
+- 查阅：`wiki_static_cann-train_recipes_qwen3-rl_md`、`sources_repos_official_cann-recipes-train_md`
   - 目的：判断 attention TP 切分上限对 decode 时延的影响
   - 结论：4tp + FIA 比 8tp 整体快 35%；KV cache 翻倍但 FIA 单核增益更大
 ```
@@ -185,5 +207,5 @@ subagent 使用本 skill 时必须遵守：
 | `wiki_search` 抛错 `MCP server unreachable` 或工具不可见 | 不要伪造结果。提示用户运行 `llm-wiki-cloud-mount` 或 `/reload-plugins`，停止本次查询 |
 | `wiki_search` 返回 `{warning: "..."}`（retriever 失败） | 把 warning 原文写到 `progress.md` "Wiki 查询记录"段；本次查询作废，不继续 get_page |
 | `wiki_get_page` 返回 `errors=[{id, reason}]` | 跳过这些 ID（多半是已归档或拼写错）；不重试 |
-| top-1 候选 summary 完全不沾边 | 重写 query 再试一次；最多重试 1 次仍不沾边 → progress.md 记"wiki 暂无相关知识"，停止 |
+| topK 候选 summary 整体完全不沾边 | 重写 query 再试一次；最多重试 1 次仍不沾边 → progress.md 记"wiki 暂无相关知识"，停止 |
 | `wiki_search` 返回 `total=0` | progress.md 记一笔"wiki 暂无相关知识"；继续任务一般流程 |

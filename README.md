@@ -1,6 +1,6 @@
 # LLM-Wiki Marketplace
 
-本仓库是 **CANN-Infer-Wiki** 云服务的多客户端插件市场，面向 Claude Code、Codex
+本仓库是 **LLM-Wiki**（NPU 大模型优化知识库）的多客户端插件市场，面向 Claude Code、Codex
 和 OpenCode 分发同一套云端 wiki 读写入口。
 
 Marketplace 名称：`llm-wiki-cloud`
@@ -89,7 +89,7 @@ MCP，并向当前客户端的项目指令文件写入 wiki 使用提示：
 - Claude Code：`CLAUDE.md`
 - Codex / OpenCode：`AGENTS.md`
 
-任务进入 LLM/NPU 推理优化相关阶段时，触发 `llm-wiki-cloud-query` skill 通过
+任务进入 NPU 大模型优化相关阶段时，触发 `llm-wiki-cloud-query` skill 通过
 MCP tools 查询 wiki。任务结束后可触发 `llm-wiki-cloud-backflow` 创建本地任务归档；
 若用户确认且配置了 `LLM_WIKI_UPLOAD_TOKEN`，插件会通过私有 HTTP backflow 入口上传归档。
 Backflow 会优先沿用项目里的 `.agents-log/summary/`；如果没有相关 summary，才使用

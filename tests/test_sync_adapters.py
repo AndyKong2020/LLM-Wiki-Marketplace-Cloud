@@ -300,9 +300,33 @@ class SyncAdaptersTests(unittest.TestCase):
                 self.assertIn("从已读页面正文里的 wiki link 转换", text)
                 self.assertIn('page_id = content_path.replace("/", "_").replace(".", "_")', text)
                 self.assertIn("wiki_static_cann-infer_models_deepseek-v3_2-exp_md", text)
+                self.assertIn("wiki_static_cann-train_recipes_qwen3-rl_md", text)
+                self.assertIn("sources_repos_official_cann-recipes-spatial-intelligence_md", text)
+                self.assertIn('domain="cann-infer"', text)
+                self.assertIn('domain="cann-train"', text)
+                self.assertIn('domain="cann-spatial"', text)
+                self.assertIn('domain="cann-embodied"', text)
+                self.assertIn("`tags` 用于限定已经明确的机制、阶段、硬件、模型族或框架关键词", text)
+                self.assertIn("多个 tags 命中任一即可", text)
+                self.assertIn("初次检索不建议加 `tags`", text)
+                self.assertIn("需要二次收窄且标签非常确定时才加", text)
+                self.assertIn('tags=["rl", "rollout"]', text)
+                self.assertIn('tags=["3dgs", "rendering"]', text)
+                self.assertIn('tags=["embodied", "vla"]', text)
+                self.assertIn("topK（由 `limit` 决定）", text)
+                self.assertIn("看返回结果中相关候选的 `summary`", text)
+                self.assertIn("返回的 topK summary 整体跟问题完全不沾边", text)
+                self.assertNotIn("top-1/top-2", text)
+                self.assertNotIn("如果 top-1", text)
+                self.assertIn("可选取感兴趣的 wiki/source link 转换为页面 id", text)
+                self.assertIn("读到 `[[sources/...]]`，需要 raw source 证据或核对原始上下文时", text)
+                self.assertNotIn("读到 `[[sources/...]]` 时，可按上面的规则转成 ID", text)
                 self.assertIn("### 3.4 应用 + 记录", text)
                 self.assertNotIn("读 content 时按问题类别看不同段", text)
                 self.assertNotIn("### 3.4 页面链接下探", text)
+                self.assertNotIn('type="kernel"', text)
+                self.assertNotIn("`type` 取值", text)
+                self.assertNotIn("多个 `tags` 是交集", text)
                 self.assertNotIn("TODO:链接下探", text)
 
     def test_backflow_uses_session_extractor_only_as_fallback(self):
@@ -360,6 +384,64 @@ class SyncAdaptersTests(unittest.TestCase):
                 self.assertIn("`.git/` 目录默认不纳入 archive/upload", text)
                 self.assertIn("如果 URL 含凭据、token 或私有入口，省略或改写后再归档", text)
                 self.assertNotIn("如果 workspace 是 git 仓库，不复制 `.git/` 目录；按需创建 `workspace/git/`", text)
+
+    def test_runtime_docs_list_current_wiki_domains(self):
+        temp_root = self.run_sync()
+        domains = ["cann-infer", "cann-train", "cann-spatial", "cann-embodied"]
+        for platform in ["claude", "codex", "opencode"]:
+            with self.subTest(platform=platform, skill="mount"):
+                mount = (
+                    temp_root
+                    / f"plugins/llm-wiki-client-{platform}/skills/llm-wiki-cloud-mount/SKILL.md"
+                ).read_text(encoding="utf-8")
+                self.assertIn("LLM-Wiki", mount)
+                self.assertIn("NPU 大模型优化知识库", mount)
+                for domain in domains:
+                    self.assertIn(domain, mount)
+                self.assertNotIn("CANN-Infer-Wiki", mount)
+                self.assertNotIn("NPU 大模型推理优化知识库", mount)
+
+            with self.subTest(platform=platform, skill="backflow"):
+                backflow = (
+                    temp_root
+                    / f"plugins/llm-wiki-client-{platform}/skills/llm-wiki-cloud-backflow/SKILL.md"
+                ).read_text(encoding="utf-8")
+                self.assertIn(
+                    "domain: <cann-infer | cann-train | cann-spatial | cann-embodied>",
+                    backflow,
+                )
+                self.assertNotIn("domain: cann-infer\n", backflow)
+
+            with self.subTest(platform=platform, skill="query"):
+                query = (
+                    temp_root
+                    / f"plugins/llm-wiki-client-{platform}/skills/llm-wiki-cloud-query/SKILL.md"
+                ).read_text(encoding="utf-8")
+                self.assertIn("LLM-Wiki", query)
+                self.assertNotIn("CANN-Infer-Wiki", query)
+
+    def test_generated_manifests_use_llm_wiki_display_name(self):
+        temp_root = self.run_sync()
+        for rel in [
+            ".claude-plugin/marketplace.json",
+            ".agents/plugins/marketplace.json",
+            "plugins/llm-wiki-client-claude/.claude-plugin/plugin.json",
+            "plugins/llm-wiki-client-codex/.codex-plugin/plugin.json",
+        ]:
+            text = (temp_root / rel).read_text(encoding="utf-8")
+            with self.subTest(rel=rel):
+                self.assertIn("LLM-Wiki", text)
+                self.assertNotIn("CANN-Infer-Wiki", text)
+                self.assertNotIn("NPU 大模型推理优化知识库", text)
+
+        for rel in [
+            ".claude-plugin/marketplace.json",
+            "plugins/llm-wiki-client-claude/.claude-plugin/plugin.json",
+            "plugins/llm-wiki-client-codex/.codex-plugin/plugin.json",
+        ]:
+            with self.subTest(rel=rel, field="description"):
+                text = (temp_root / rel).read_text(encoding="utf-8")
+                self.assertIn("NPU 大模型优化知识库", text)
 
     def test_backflow_upload_sends_client_plugin_version(self):
         temp_root = self.run_sync()
