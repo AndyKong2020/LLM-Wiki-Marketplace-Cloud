@@ -246,7 +246,13 @@ class DocumentationTests(unittest.TestCase):
             "codex plugin marketplace remove llm-wiki-cloud",
             "bootstrap.sh | bash",
             "uninstall.sh | bash",
-            "维护发布",
+            "知识库能提供什么",
+            "安装 / 更新 / 卸载",
+            "cann-infer",
+            "cann-train",
+            "cann-spatial",
+            "cann-embodied",
+            "模型族、算子/kernel、并行策略",
             "llm-wiki-cloud-mount",
             "llm-wiki-cloud-backflow",
         ]:
@@ -260,6 +266,9 @@ class DocumentationTests(unittest.TestCase):
         self.assertNotIn("CODEX_HOME", text)
         self.assertNotIn("OPENCODE_CONFIG_DIR", text)
         self.assertNotIn("python3 scripts/test_isolated_clients.py", text)
+        self.assertNotIn("维护发布", text)
+        self.assertNotIn("python3 scripts/sync_adapters.py", text)
+        self.assertNotIn("python3 scripts/validate_release.py", text)
         self.assertNotIn("codex plugin marketplace upgrade\n", text)
         self.assertNotIn("/llm-wiki-client:", text)
         self.assertNotIn("/wiki-cloud-mount", text)

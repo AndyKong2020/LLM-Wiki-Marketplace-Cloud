@@ -6,7 +6,18 @@
 Marketplace 名称：`llm-wiki-cloud`
 插件：`llm-wiki-client@llm-wiki-cloud`
 
-## 安装维护命令
+## 知识库能提供什么
+
+LLM-Wiki 为 agent 提供可检索的 NPU 大模型优化经验，用于方案分析、策略选择、性能/精度回归归因和调试。当前覆盖四个 domain：
+
+- `cann-infer`：推理优化
+- `cann-train`：训练优化
+- `cann-spatial`：空间智能
+- `cann-embodied`：具身智能
+
+知识内容包括模型族、算子/kernel、并行策略、推理/训练框架、优化技术、量化、硬件平台、recipe、algorithm，以及必要时可下探的 raw source 证据。
+
+## 安装 / 更新 / 卸载
 
 ### Claude Code
 
@@ -111,33 +122,6 @@ export LLM_WIKI_UPLOAD_TOKEN="llmw_<token-from-operator>"
 
 Token 由 operator 通过仓库外渠道分发。不要提交 token，不要把 token 写入归档，
 也不要粘贴到日志里。
-
-## 维护发布
-
-`src/skills/` 是三端 skill 的唯一源头，`src/shared/` 保存共享常量和 pin block，
-`platforms/` 保存需要变量渲染的 JSON 模板。
-
-修改源模板后运行：
-
-```bash
-python3 scripts/sync_adapters.py
-python3 scripts/validate_release.py
-python3 -m unittest discover -s tests -v
-```
-
-`scripts/sync_adapters.py` 会生成 Claude Code、Codex 和 OpenCode 的 skills、manifest
-与 MCP 配置，并复制 skill 自带的 `scripts/` 等支持文件。维护生成产物时不要直接手改
-`plugins/*/skills/**/SKILL.md` 或 manifest；应修改源模板后重新同步。
-
-正式发布前需要人工对比 Claude Code 适配输出与生产原版 skill 文档，确认差异只来自：
-
-- 版本号
-- 三端 skill 入口命名
-- 平台指令文件：`CLAUDE.md` / `AGENTS.md`
-- 平台 MCP tool 名称
-- OpenCode 安装脚本和共享 backflow 路径
-
-OpenCode 的 `bootstrap.sh`、`install-opencode.sh`、`uninstall.sh` 是直接维护的发布脚本。
 
 ## 目录结构
 
